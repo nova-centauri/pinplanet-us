@@ -29,6 +29,7 @@ body,
   background: var(--bg);
   color: var(--fg);
   font-family: var(--mono);
+  user-select: none;
 }
 
 #globe {
@@ -38,6 +39,7 @@ body,
   height: 100%;
   display: block;
   cursor: grab;
+  touch-action: none;
 }
 
 #globe:active {

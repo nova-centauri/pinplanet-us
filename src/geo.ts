@@ -31,22 +31,6 @@ export function slerpDir(
   return target.copy(a).applyQuaternion(q).normalize();
 }
 
-export function greatCircle(
-  from: THREE.Vector3,
-  to: THREE.Vector3,
-  segments = 96,
-  radius = globeRadius * 1.018,
-): THREE.Vector3[] {
-  const a = from.clone().normalize();
-  const b = to.clone().normalize();
-  const points: THREE.Vector3[] = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    points.push(slerpDir(a, b, t).multiplyScalar(radius));
-  }
-  return points;
-}
-
 export function easeInOutQuart(t: number): number {
   return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
 }

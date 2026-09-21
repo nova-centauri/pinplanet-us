@@ -1,9 +1,23 @@
 import * as THREE from "three";
-import { easeInOutQuart, greatCircle, latLngToVector3 } from "./geo";
+import { easeInOutQuart, latLngToVector3, slerpDir } from "./geo";
 import { dwellDistance, flightDuration, flightLift, globeRadius, theme } from "./theme";
 import type { Pin } from "./types";
 
 export type FlightPhase = "idle" | "flying";
+
+class GreatCircleCurve extends THREE.Curve<THREE.Vector3> {
+  constructor(
+    private readonly fromDir: THREE.Vector3,
+    private readonly toDir: THREE.Vector3,
+    private readonly radius: number,
+  ) {
+    super();
+  }
+
+  getPoint(t: number, target = new THREE.Vector3()): THREE.Vector3 {
+    return slerpDir(this.fromDir, this.toDir, t, target).multiplyScalar(this.radius);
+  }
+}
 
 export class FlightRig {
   phase: FlightPhase = "idle";
@@ -12,9 +26,11 @@ export class FlightRig {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly earth: THREE.Group;
   private readonly look = new THREE.Vector3();
+  private readonly origin = new THREE.Vector3();
   private readonly spark: THREE.Mesh;
   private trail: THREE.Mesh | null = null;
   private fadeTrail: THREE.Mesh | null = null;
+  private trailCurve: GreatCircleCurve | null = null;
 
   private fromDir = new THREE.Vector3(0, 0, 1);
   private toDir = new THREE.Vector3(0, 0, 1);
@@ -30,7 +46,7 @@ export class FlightRig {
     this.earth = earth;
 
     this.spark = new THREE.Mesh(
-      new THREE.SphereGeometry(0.028, 12, 12),
+      new THREE.SphereGeometry(0.018, 12, 12),
       new THREE.MeshBasicMaterial({ color: theme.cyan }),
     );
     this.spark.visible = false;
@@ -43,8 +59,8 @@ export class FlightRig {
     this.toDir.copy(dir);
     this.fromRadius = radius;
     this.toRadius = radius;
-    this.lookFrom.copy(dir).multiplyScalar(globeRadius * 0.2);
-    this.lookTo.copy(this.lookFrom);
+    this.lookFrom.set(0, 0, 0);
+    this.lookTo.set(0, 0, 0);
     this.applyPose(dir, radius, this.lookFrom);
     this.phase = "idle";
     this.progress = 1;
@@ -62,14 +78,15 @@ export class FlightRig {
     this.fromRadius = this.camera.position.length();
     this.toRadius = dwellDistance;
     this.lookFrom.copy(this.look);
-    this.lookTo.copy(toDir).multiplyScalar(globeRadius * 0.22);
+    this.lookTo.set(0, 0, 0);
     this.elapsed = 0;
     this.duration = duration;
     this.phase = "flying";
     this.progress = 0;
 
     this.retireTrail();
-    this.trail = this.makeTrail(trailFrom, toDir);
+    this.trailCurve = new GreatCircleCurve(trailFrom, toDir, globeRadius * 1.028);
+    this.trail = this.makeTrail(this.trailCurve);
     this.earth.add(this.trail);
     this.spark.visible = true;
   }
@@ -114,7 +131,7 @@ export class FlightRig {
     const qX = new THREE.Quaternion().setFromAxisAngle(right, dLat);
     this.toDir.applyQuaternion(qY).applyQuaternion(qX).normalize();
     this.fromDir.copy(this.toDir);
-    this.applyPose(this.toDir, this.toRadius, this.lookTo);
+    this.applyPose(this.toDir, this.toRadius, this.origin);
   }
 
   spin(radians: number): void {
@@ -122,7 +139,7 @@ export class FlightRig {
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), radians);
     this.toDir.applyQuaternion(q).normalize();
     this.fromDir.copy(this.toDir);
-    this.applyPose(this.toDir, this.toRadius, this.lookTo);
+    this.applyPose(this.toDir, this.toRadius, this.origin);
   }
 
   private applyPose(dir: THREE.Vector3, radius: number, look: THREE.Vector3): void {
@@ -132,13 +149,8 @@ export class FlightRig {
     this.camera.lookAt(look);
   }
 
-  private makeTrail(fromDir: THREE.Vector3, toDir: THREE.Vector3): THREE.Mesh {
-    const points = greatCircle(
-      fromDir.clone().multiplyScalar(globeRadius),
-      toDir.clone().multiplyScalar(globeRadius),
-    );
-    const curve = new THREE.CatmullRomCurve3(points);
-    const geometry = new THREE.TubeGeometry(curve, 96, 0.011, 8, false);
+  private makeTrail(curve: GreatCircleCurve): THREE.Mesh {
+    const geometry = new THREE.TubeGeometry(curve, 128, 0.01, 8, false);
     const material = new THREE.MeshBasicMaterial({
       color: theme.cyan,
       transparent: true,
@@ -157,14 +169,10 @@ export class FlightRig {
     const total = index ? index.count : this.trail.geometry.attributes.position.count;
     this.trail.geometry.setDrawRange(0, Math.max(3, Math.floor(t * total)));
     const mat = this.trail.material as THREE.MeshBasicMaterial;
-    mat.opacity = 0.35 + 0.55 * Math.sin(t * Math.PI);
-
-    const points = greatCircle(
-      this.fromDir.clone().multiplyScalar(globeRadius),
-      this.toDir.clone().multiplyScalar(globeRadius),
-    );
-    const idx = Math.min(points.length - 1, Math.floor(t * (points.length - 1)));
-    this.spark.position.copy(points[idx]!);
+    mat.opacity = 0.4 + 0.5 * Math.sin(t * Math.PI);
+    if (this.trailCurve) {
+      this.spark.position.copy(this.trailCurve.getPoint(t));
+    }
   }
 
   private retireTrail(): void {

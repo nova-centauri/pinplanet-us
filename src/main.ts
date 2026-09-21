@@ -53,6 +53,7 @@ canvas.addEventListener("pointermove", (event) => {
   flight.orbit(-dx * 0.005, -dy * 0.004);
 });
 canvas.addEventListener("pointerup", () => {
+  if (dragging) dwellLeft = dwellDuration;
   dragging = false;
 });
 canvas.addEventListener("pointercancel", () => {

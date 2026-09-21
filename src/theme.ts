@@ -13,8 +13,8 @@ export const theme = {
 } as const;
 
 export const globeRadius = 1.62;
-export const dwellDistance = 3.05;
-export const flightLift = 1.42;
+export const dwellDistance = 3.72;
+export const flightLift = 1.28;
 export const flightDuration = 3.35;
 export const dwellDuration = 5.2;
 export const idleSpin = 0.045;

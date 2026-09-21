@@ -69,13 +69,13 @@ export class GlobeScene {
       group.lookAt(0, 0, 0);
 
       const core = new THREE.Mesh(
-        new THREE.SphereGeometry(0.016, 14, 14),
+        new THREE.SphereGeometry(0.009, 12, 12),
         new THREE.MeshBasicMaterial({ color: theme.cyan }),
       );
-      core.position.set(0, 0, -0.022);
+      core.position.set(0, 0, -0.012);
 
       const halo = new THREE.Mesh(
-        new THREE.CircleGeometry(0.038, 24),
+        new THREE.CircleGeometry(0.02, 20),
         new THREE.MeshBasicMaterial({
           color: theme.blue,
           transparent: true,
@@ -84,10 +84,10 @@ export class GlobeScene {
           depthWrite: false,
         }),
       );
-      halo.position.set(0, 0, -0.004);
+      halo.position.set(0, 0, -0.003);
 
       const pulse = new THREE.Mesh(
-        new THREE.RingGeometry(0.04, 0.05, 28),
+        new THREE.RingGeometry(0.022, 0.028, 24),
         new THREE.MeshBasicMaterial({
           color: theme.cyan,
           transparent: true,
@@ -96,7 +96,7 @@ export class GlobeScene {
           depthWrite: false,
         }),
       );
-      pulse.position.set(0, 0, -0.006);
+      pulse.position.set(0, 0, -0.004);
 
       group.add(halo, pulse, core);
       this.earth.add(group);
