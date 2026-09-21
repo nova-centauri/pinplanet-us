@@ -106,6 +106,8 @@ function frame(): void {
     }
   }
 
+  hud.setClock(flight.phase === "flying" ? null : Math.max(0, dwellLeft));
+
   globe.tick();
   globe.render();
   requestAnimationFrame(frame);

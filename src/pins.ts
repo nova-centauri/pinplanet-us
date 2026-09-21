@@ -59,7 +59,7 @@ export function loadPins(): Pin[] {
     storyLabel: raw.story_label,
     added: raw.added,
     continent: continentOf(raw),
-    imageUrl: `https://picsum.photos/seed/pinplanet-${raw.id}/960/540`,
+    imageUrl: "",
   }));
 }
 

@@ -24,12 +24,13 @@ npm run preview    # serve the built files
 
 ## What V1 does
 
-- Full-viewport **point-cloud globe** (Tokyo Night palette, no textured Earth)
-- Auto-tour on by default: camera **arcs** between pins with a glow trail — never a hard cut
+- Full-viewport **point-cloud globe** (Tokyo Night palette, coast-lit dots, atmosphere glow)
+- Auto-tour on by default: cinematic camera hop (ease, altitude, slight roll) + additive trail
 - **Continent rule:** every hop lands on a different continent than the last pin
-- Dwell ~5s so the info card can be read (title, fact, date, still image)
+- Dwell ~6s so the info card can be read (title, fact, date, Wikipedia still when available)
+- Idle slow spin + pin pulse — meant to sit open like a screensaver
 - Drag to orbit while idle · **Surprise me** / `space` jumps immediately
 
 Pins are the 29 curated seeds, tagged with a continent in the app layer.
-Images use public `picsum.photos` placeholders and fall back to a solid panel
-if they fail to load. There is no audio.
+Card images try the Wikipedia page thumbnail and fall back to a coordinate panel.
+There is no audio.

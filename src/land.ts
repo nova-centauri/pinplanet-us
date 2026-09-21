@@ -7,11 +7,17 @@ type Ring = [number, number][];
 type Polygon = Ring[];
 type MultiPolygon = Polygon[];
 
+export interface LandCloud {
+  positions: Float32Array;
+  colors: Float32Array;
+  sizes: Float32Array;
+}
+
 /**
- * Rasterize Natural Earth land (110m) and keep Fibonacci-sphere samples
- * that fall on land. Gives a recognizable dotted Earth without a texture.
+ * Rasterize Natural Earth land and sample a Fibonacci cloud.
+ * Coast pixels get cyan and a little extra size so continents have an edge.
  */
-export function buildLandPositions(count = 16000): Float32Array {
+export function buildLandCloud(count = 24000): LandCloud {
   const raw = feature(
     landTopo as never,
     (landTopo as { objects: { land: never } }).objects.land,
@@ -30,7 +36,13 @@ export function buildLandPositions(count = 16000): Float32Array {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return new Float32Array(0);
+  if (!ctx) {
+    return {
+      positions: new Float32Array(0),
+      colors: new Float32Array(0),
+      sizes: new Float32Array(0),
+    };
+  }
 
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, width, height);
@@ -56,15 +68,35 @@ export function buildLandPositions(count = 16000): Float32Array {
   }
 
   const pixels = ctx.getImageData(0, 0, width, height).data;
-  const isLand = (lat: number, lng: number): boolean => {
-    const x = Math.min(width - 1, Math.max(0, Math.floor(((lng + 180) / 360) * width)));
-    const y = Math.min(height - 1, Math.max(0, Math.floor(((90 - lat) / 180) * height)));
-    return pixels[(y * width + x) * 4]! > 128;
+  const landAt = (x: number, y: number): boolean => {
+    const xx = Math.min(width - 1, Math.max(0, x));
+    const yy = Math.min(height - 1, Math.max(0, y));
+    return pixels[(yy * width + xx) * 4]! > 128;
+  };
+
+  const coastAt = (x: number, y: number): number => {
+    let ocean = 0;
+    const n = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [2, 0],
+      [-2, 0],
+      [0, 2],
+      [0, -2],
+    ];
+    for (const [dx, dy] of n) {
+      if (!landAt(x + dx, y + dy)) ocean += 1;
+    }
+    return ocean / n.length;
   };
 
   const golden = Math.PI * (3 - Math.sqrt(5));
-  const probe = Math.floor(count * 2.6);
+  const probe = Math.floor(count * 2.8);
   const positions: number[] = [];
+  const colors: number[] = [];
+  const sizes: number[] = [];
 
   for (let i = 0; i < probe && positions.length / 3 < count; i++) {
     const y = 1 - (i / Math.max(probe - 1, 1)) * 2;
@@ -72,16 +104,36 @@ export function buildLandPositions(count = 16000): Float32Array {
     const theta = golden * i;
     const x = Math.cos(theta) * radius;
     const z = Math.sin(theta) * radius;
-    const lat = (Math.asin(THREE_CLAMP(y)) * 180) / Math.PI;
+    const lat = (Math.asin(clamp(y)) * 180) / Math.PI;
     const lng = (Math.atan2(z, x) * 180) / Math.PI;
-    if (!isLand(lat, lng)) continue;
+    const px = Math.floor(((lng + 180) / 360) * width);
+    const py = Math.floor(((90 - lat) / 180) * height);
+    if (!landAt(px, py)) continue;
+
+    const coast = coastAt(px, py);
     const v = latLngToVector3(lat, lng, globeRadius);
     positions.push(v.x, v.y, v.z);
+
+    if (coast > 0.2) {
+      const k = Math.min(1, coast * 1.4);
+      colors.push(0.49 + 0.15 * k, 0.64 + 0.17 * k, 0.97);
+      sizes.push(1.05 + k * 0.85);
+    } else if (lat < -62) {
+      colors.push(0.86, 0.9, 0.98);
+      sizes.push(0.95);
+    } else {
+      colors.push(0.62, 0.68, 0.86);
+      sizes.push(0.78 + Math.random() * 0.18);
+    }
   }
 
-  return new Float32Array(positions);
+  return {
+    positions: new Float32Array(positions),
+    colors: new Float32Array(colors),
+    sizes: new Float32Array(sizes),
+  };
 }
 
-function THREE_CLAMP(n: number): number {
+function clamp(n: number): number {
   return Math.min(1, Math.max(-1, n));
 }

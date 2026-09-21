@@ -29,18 +29,26 @@
         <div class="status" id="status">
           <span class="led" id="led"></span>
           <span id="status-mode">AUTO-TOUR</span>
+          <span class="sep">/</span>
           <span class="dim" id="status-hop"></span>
+          <span class="sep">/</span>
+          <span id="status-clock">00.0</span>
         </div>
       </header>
 
       <article class="card" id="card" data-open="false">
         <div class="card-media" id="card-media">
+          <div class="card-fallback" aria-hidden="true">
+            <span class="card-coord-lg" id="card-coord-lg"></span>
+            <span class="card-continent-lg" id="card-continent-lg"></span>
+          </div>
           <img id="card-image" alt="" />
           <div class="card-scan" aria-hidden="true"></div>
+          <div class="card-corners" aria-hidden="true"></div>
         </div>
         <div class="card-body">
           <div class="card-kicker">
-            <span id="card-category">site</span>
+            <span class="pill" id="card-category">site</span>
             <span class="dim" id="card-meta"></span>
           </div>
           <h2 id="card-title"></h2>

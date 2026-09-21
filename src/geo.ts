@@ -31,6 +31,17 @@ export function slerpDir(
   return target.copy(a).applyQuaternion(q).normalize();
 }
 
-export function easeInOutQuart(t: number): number {
-  return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
+/** Slow push, fast cruise, soft settle — reads as a camera move, not a lerp. */
+export function easeCinematic(t: number): number {
+  const x = Math.min(1, Math.max(0, t));
+  return x * x * x * (x * (x * 6 - 15) + 10);
+}
+
+export function hash01(input: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
 }

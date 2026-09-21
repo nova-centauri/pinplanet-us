@@ -1,7 +1,7 @@
 /** Hardcoded Tokyo Night palette — no theme switcher in V1. */
 export const theme = {
-  bg: 0x1a1b26,
-  bgDeep: 0x11131c,
+  bg: 0x0d0f17,
+  bgDeep: 0x07080d,
   fg: 0xc0caf5,
   blue: 0x7aa2f7,
   cyan: 0x7dcfff,
@@ -13,8 +13,8 @@ export const theme = {
 } as const;
 
 export const globeRadius = 1.62;
-export const dwellDistance = 3.72;
-export const flightLift = 1.28;
-export const flightDuration = 3.35;
-export const dwellDuration = 5.2;
-export const idleSpin = 0.045;
+export const dwellDistance = 3.92;
+export const flightLift = 1.72;
+export const flightDuration = 4.05;
+export const dwellDuration = 6.1;
+export const idleSpin = 0.026;

@@ -1,18 +1,20 @@
 import * as THREE from "three";
-import { easeInOutQuart, latLngToVector3, slerpDir } from "./geo";
+import { easeCinematic, latLngToVector3, slerpDir } from "./geo";
+import { glowTexture } from "./glow";
 import { dwellDistance, flightDuration, flightLift, globeRadius, theme } from "./theme";
 import type { Pin } from "./types";
 
 export type FlightPhase = "idle" | "flying";
 
-/** Nudge the camera off the pin axis so the raised trail reads as an arc. */
-function offsetView(dir: THREE.Vector3): THREE.Vector3 {
+const BASE_FOV = 40;
+
+function offsetView(dir: THREE.Vector3, yaw = 0.34): THREE.Vector3 {
   const axis = new THREE.Vector3(0, 1, 0).cross(dir);
   if (axis.lengthSq() < 1e-6) axis.set(1, 0, 0);
   axis.normalize();
   return dir
     .clone()
-    .applyQuaternion(new THREE.Quaternion().setFromAxisAngle(axis, 0.32))
+    .applyQuaternion(new THREE.Quaternion().setFromAxisAngle(axis, yaw))
     .normalize();
 }
 
@@ -27,10 +29,33 @@ class RaisedArcCurve extends THREE.Curve<THREE.Vector3> {
   }
 
   getPoint(t: number, target = new THREE.Vector3()): THREE.Vector3 {
-    const r = this.radius + this.lift * Math.sin(Math.PI * t);
+    const r = this.radius + this.lift * Math.pow(Math.sin(Math.PI * t), 0.72);
     return slerpDir(this.fromDir, this.toDir, t, target).multiplyScalar(r);
   }
 }
+
+const trailVert = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const trailFrag = `
+uniform float uProgress;
+uniform vec3 uColor;
+uniform float uOpacity;
+varying vec2 vUv;
+void main() {
+  if (vUv.x > uProgress) discard;
+  float head = smoothstep(uProgress - 0.16, uProgress, vUv.x);
+  float born = smoothstep(0.0, 0.08, vUv.x);
+  float across = 1.0 - abs(vUv.y - 0.5) * 2.0;
+  float a = uOpacity * (0.18 + 0.82 * head) * born * (0.35 + 0.65 * across);
+  gl_FragColor = vec4(uColor, a);
+}
+`;
 
 export class FlightRig {
   phase: FlightPhase = "idle";
@@ -40,84 +65,83 @@ export class FlightRig {
   private readonly earth: THREE.Group;
   private readonly look = new THREE.Vector3();
   private readonly origin = new THREE.Vector3();
-  private readonly spark: THREE.Mesh;
-  private trail: THREE.Mesh | null = null;
-  private fadeTrail: THREE.Mesh | null = null;
+  private readonly spark: THREE.Sprite;
+  private readonly scratch = new THREE.Vector3();
+  private trailCore: THREE.Mesh | null = null;
+  private trailGlow: THREE.Mesh | null = null;
+  private fadeCore: THREE.Mesh | null = null;
+  private fadeGlow: THREE.Mesh | null = null;
   private trailCurve: RaisedArcCurve | null = null;
 
   private fromDir = new THREE.Vector3(0, 0, 1);
   private toDir = new THREE.Vector3(0, 0, 1);
-  private fromRadius = 5.2;
+  private fromRadius = 6.4;
   private toRadius = dwellDistance;
   private elapsed = 0;
   private duration = flightDuration;
   private lookFrom = new THREE.Vector3();
   private lookTo = new THREE.Vector3();
+  private bankSign = 1;
+  private idleTime = 0;
 
   constructor(camera: THREE.PerspectiveCamera, earth: THREE.Group) {
     this.camera = camera;
     this.earth = earth;
 
-    this.spark = new THREE.Mesh(
-      new THREE.SphereGeometry(0.018, 12, 12),
-      new THREE.MeshBasicMaterial({ color: theme.cyan }),
+    this.spark = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTexture(),
+        color: theme.cyan,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
     );
+    this.spark.scale.setScalar(0.18);
     this.spark.visible = false;
     this.earth.add(this.spark);
   }
 
-  placeIdle(pin: Pin, radius = dwellDistance): void {
-    const dir = latLngToVector3(pin.lat, pin.lng, 1);
-    this.fromDir.copy(dir);
-    this.toDir.copy(dir);
-    this.fromRadius = radius;
-    this.toRadius = radius;
-    this.lookFrom.set(0, 0, 0);
-    this.lookTo.set(0, 0, 0);
-    this.applyPose(dir, radius, this.lookFrom);
-    this.phase = "idle";
-    this.progress = 1;
-  }
-
   start(from: Pin | null, to: Pin, duration = flightDuration): void {
-    const toDir = latLngToVector3(to.lat, to.lng, 1);
+    const pinDir = latLngToVector3(to.lat, to.lng, 1);
     const fromDir = this.camera.position.clone().normalize();
-    const trailFrom = from
-      ? latLngToVector3(from.lat, from.lng, 1)
-      : fromDir;
+    const trailFrom = from ? latLngToVector3(from.lat, from.lng, 1) : fromDir;
+    const crossing = new THREE.Vector3().crossVectors(fromDir, pinDir);
 
     this.fromDir.copy(fromDir);
-    this.toDir.copy(offsetView(toDir));
+    this.toDir.copy(offsetView(pinDir, 0.3));
     this.fromRadius = this.camera.position.length();
     this.toRadius = dwellDistance;
     this.lookFrom.copy(this.look);
     this.lookTo.set(0, 0, 0);
+    this.bankSign = Math.sign(crossing.y) || 1;
     this.elapsed = 0;
     this.duration = duration;
     this.phase = "flying";
     this.progress = 0;
+    this.idleTime = 0;
 
     this.retireTrail();
-    this.trailCurve = new RaisedArcCurve(
-      trailFrom,
-      toDir,
-      globeRadius * 1.02,
-      0.42,
-    );
-    this.trail = this.makeTrail(this.trailCurve);
-    this.earth.add(this.trail);
+    this.trailCurve = new RaisedArcCurve(trailFrom, pinDir, globeRadius * 1.02, 0.58);
+    const { core, glow } = this.makeTrail(this.trailCurve);
+    this.trailCore = core;
+    this.trailGlow = glow;
+    this.earth.add(core, glow);
     this.spark.visible = true;
   }
 
   /** Advance the flight. Returns true on the frame the camera lands. */
   update(dt: number): boolean {
     if (this.phase !== "flying") {
+      this.idleTime += dt;
       this.fadeOldTrails(dt);
       return false;
     }
 
     this.elapsed += dt;
-    const t = easeInOutQuart(Math.min(1, this.elapsed / this.duration));
+    const raw = Math.min(1, this.elapsed / this.duration);
+    const t = easeCinematic(raw);
     this.progress = t;
 
     const dir = new THREE.Vector3();
@@ -125,17 +149,30 @@ export class FlightRig {
     const qT = new THREE.Quaternion().slerp(q, t);
     dir.copy(this.fromDir).applyQuaternion(qT).normalize();
 
-    const radius =
-      THREE.MathUtils.lerp(this.fromRadius, this.toRadius, t) +
-      Math.sin(t * Math.PI) * flightLift;
+    const lift = Math.pow(Math.sin(Math.PI * t), 0.68) * flightLift;
+    const radius = THREE.MathUtils.lerp(this.fromRadius, this.toRadius, t) + lift;
+
+    const ahead = this.trailCurve
+      ? this.trailCurve.getPoint(Math.min(1, t + 0.08), this.scratch)
+      : this.origin;
+    const lookMix = Math.sin(Math.PI * t) * 0.42;
     this.look.lerpVectors(this.lookFrom, this.lookTo, t);
-    this.applyPose(dir, radius, this.look);
+    this.look.lerp(ahead, lookMix);
+
+    const roll = Math.sin(Math.PI * t) * 0.28 * this.bankSign;
+    this.applyPose(dir, radius, this.look, roll);
+    this.camera.fov = BASE_FOV + Math.sin(Math.PI * t) * 8.5;
+    this.camera.updateProjectionMatrix();
     this.drawTrail(t);
 
     if (this.elapsed >= this.duration) {
       this.phase = "idle";
       this.progress = 1;
       this.spark.visible = false;
+      (this.spark.material as THREE.SpriteMaterial).opacity = 0;
+      this.camera.fov = BASE_FOV;
+      this.camera.updateProjectionMatrix();
+      this.applyPose(this.toDir, this.toRadius, this.origin, 0);
       return true;
     }
     return false;
@@ -149,7 +186,7 @@ export class FlightRig {
     const qX = new THREE.Quaternion().setFromAxisAngle(right, dLat);
     this.toDir.applyQuaternion(qY).applyQuaternion(qX).normalize();
     this.fromDir.copy(this.toDir);
-    this.applyPose(this.toDir, this.toRadius, this.origin);
+    this.applyPose(this.toDir, this.breatheRadius(), this.origin, 0);
   }
 
   spin(radians: number): void {
@@ -157,64 +194,109 @@ export class FlightRig {
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), radians);
     this.toDir.applyQuaternion(q).normalize();
     this.fromDir.copy(this.toDir);
-    this.applyPose(this.toDir, this.toRadius, this.origin);
+    this.applyPose(this.toDir, this.breatheRadius(), this.origin, 0);
   }
 
-  private applyPose(dir: THREE.Vector3, radius: number, look: THREE.Vector3): void {
+  private breatheRadius(): number {
+    return this.toRadius + Math.sin(this.idleTime * 0.42) * 0.045;
+  }
+
+  private applyPose(dir: THREE.Vector3, radius: number, look: THREE.Vector3, roll: number): void {
     this.look.copy(look);
     this.camera.position.copy(dir).multiplyScalar(radius);
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(look);
+    if (Math.abs(roll) > 1e-4) {
+      const view = look.clone().sub(this.camera.position).normalize();
+      this.camera.up.applyAxisAngle(view, roll);
+      this.camera.lookAt(look);
+    }
   }
 
-  private makeTrail(curve: RaisedArcCurve): THREE.Mesh {
-    const geometry = new THREE.TubeGeometry(curve, 160, 0.014, 10, false);
-    const material = new THREE.MeshBasicMaterial({
-      color: theme.cyan,
+  private makeTrail(curve: RaisedArcCurve): { core: THREE.Mesh; glow: THREE.Mesh } {
+    const core = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 180, 0.009, 8, false),
+      this.trailMaterial(theme.cyan, 0.95),
+    );
+    const glow = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 180, 0.028, 10, false),
+      this.trailMaterial(theme.blue, 0.38),
+    );
+    core.renderOrder = 3;
+    glow.renderOrder = 2;
+    return { core, glow };
+  }
+
+  private trailMaterial(color: number, opacity: number): THREE.ShaderMaterial {
+    return new THREE.ShaderMaterial({
       transparent: true,
-      opacity: 0.88,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      uniforms: {
+        uProgress: { value: 0 },
+        uColor: { value: new THREE.Color(color) },
+        uOpacity: { value: opacity },
+      },
+      vertexShader: trailVert,
+      fragmentShader: trailFrag,
     });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = 2;
-    geometry.setDrawRange(0, 0);
-    return mesh;
   }
 
   private drawTrail(t: number): void {
-    if (!this.trail) return;
-    const index = this.trail.geometry.getIndex();
-    const total = index ? index.count : this.trail.geometry.attributes.position.count;
-    this.trail.geometry.setDrawRange(0, Math.max(3, Math.floor(t * total)));
-    const mat = this.trail.material as THREE.MeshBasicMaterial;
-    mat.opacity = 0.4 + 0.5 * Math.sin(t * Math.PI);
+    const mats = [this.trailCore, this.trailGlow].map(
+      (mesh) => mesh?.material as THREE.ShaderMaterial | undefined,
+    );
+    for (const mat of mats) {
+      if (mat) mat.uniforms.uProgress!.value = t;
+    }
     if (this.trailCurve) {
       this.spark.position.copy(this.trailCurve.getPoint(t));
+      const head = 0.35 + 0.65 * Math.sin(Math.PI * t);
+      (this.spark.material as THREE.SpriteMaterial).opacity = head;
+      this.spark.scale.setScalar(0.14 + 0.16 * Math.sin(Math.PI * t));
     }
   }
 
   private retireTrail(): void {
-    if (this.fadeTrail) {
-      this.earth.remove(this.fadeTrail);
-      this.fadeTrail.geometry.dispose();
-      (this.fadeTrail.material as THREE.Material).dispose();
-    }
-    this.fadeTrail = this.trail;
-    this.trail = null;
-    if (this.fadeTrail) {
-      (this.fadeTrail.material as THREE.MeshBasicMaterial).opacity = 0.22;
-    }
+    this.disposePair(this.fadeCore, this.fadeGlow);
+    this.fadeCore = this.trailCore;
+    this.fadeGlow = this.trailGlow;
+    this.trailCore = null;
+    this.trailGlow = null;
+    this.dim(this.fadeCore, 0.2);
+    this.dim(this.fadeGlow, 0.1);
   }
 
   private fadeOldTrails(dt: number): void {
-    if (!this.fadeTrail) return;
-    const mat = this.fadeTrail.material as THREE.MeshBasicMaterial;
-    mat.opacity = Math.max(0, mat.opacity - dt * 0.18);
-    if (mat.opacity <= 0) {
-      this.earth.remove(this.fadeTrail);
-      this.fadeTrail.geometry.dispose();
-      mat.dispose();
-      this.fadeTrail = null;
+    const fade = (mesh: THREE.Mesh | null): THREE.Mesh | null => {
+      if (!mesh) return null;
+      const mat = mesh.material as THREE.ShaderMaterial;
+      const next = Math.max(0, (mat.uniforms.uOpacity!.value as number) - dt * 0.12);
+      mat.uniforms.uOpacity!.value = next;
+      if (next <= 0) {
+        this.earth.remove(mesh);
+        mesh.geometry.dispose();
+        mat.dispose();
+        return null;
+      }
+      return mesh;
+    };
+    this.fadeCore = fade(this.fadeCore);
+    this.fadeGlow = fade(this.fadeGlow);
+  }
+
+  private dim(mesh: THREE.Mesh | null, opacity: number): void {
+    if (!mesh) return;
+    (mesh.material as THREE.ShaderMaterial).uniforms.uOpacity!.value = opacity;
+  }
+
+  private disposePair(a: THREE.Mesh | null, b: THREE.Mesh | null): void {
+    for (const mesh of [a, b]) {
+      if (!mesh) continue;
+      this.earth.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
     }
   }
 }
