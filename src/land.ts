@@ -116,14 +116,14 @@ export function buildLandCloud(count = 24000): LandCloud {
 
     if (coast > 0.2) {
       const k = Math.min(1, coast * 1.4);
-      colors.push(0.52 + 0.2 * k, 0.68 + 0.18 * k, 0.98);
-      sizes.push(1.05 + k * 0.35);
+      colors.push(0.58 + 0.22 * k, 0.74 + 0.16 * k, 1.0);
+      sizes.push(1.12 + k * 0.28);
     } else if (lat < -62) {
-      colors.push(0.78, 0.82, 0.94);
-      sizes.push(0.88);
+      colors.push(0.82, 0.86, 0.96);
+      sizes.push(0.92);
     } else {
-      colors.push(0.68, 0.73, 0.9);
-      sizes.push(0.82 + Math.random() * 0.12);
+      colors.push(0.74, 0.79, 0.96);
+      sizes.push(0.9 + Math.random() * 0.1);
     }
   }
 

@@ -52,8 +52,8 @@ body,
   inset: 0;
   background-image: radial-gradient(circle, #3b426144 0.7px, transparent 0.8px);
   background-size: 24px 24px;
-  mask-image: radial-gradient(circle at 50% 44%, transparent 34%, #000 82%);
-  opacity: 0.4;
+  mask-image: radial-gradient(circle at 50% 45%, transparent 58%, #000 92%);
+  opacity: 0.28;
 }
 
 .chrome {

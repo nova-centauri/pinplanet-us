@@ -32,7 +32,7 @@ void main() {
   vFacing = max(dot(n, viewDir), 0.0);
   vec4 mv = viewMatrix * world;
   float dist = max(-mv.z, 1.4);
-  gl_PointSize = max(1.15, aSize * uScale * uPixelRatio * (6.4 / dist));
+  gl_PointSize = max(1.25, aSize * uScale * uPixelRatio * (9.0 / dist));
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -46,7 +46,7 @@ void main() {
   if (d > 0.62) discard;
   float core = 1.0 - smoothstep(0.08, 0.62, d);
   float depth = 0.34 + 0.66 * pow(vFacing, 0.7);
-  gl_FragColor = vec4(vColor, core * depth * 0.92);
+  gl_FragColor = vec4(vColor, core * depth);
 }
 `;
 
