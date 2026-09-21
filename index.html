@@ -6,11 +6,14 @@
     <title>PinPlanet</title>
     <meta
       name="description"
-      content="A 3D globe that auto-tours the planet, pin by pin."
+      content="A 3D globe that auto-tours the planet, pin by pin: volcanoes, battlefields, fossils, craters, live earthquakes and more."
     />
+    <meta name="theme-color" content="#0d0f17" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/data/pins.json" as="fetch" crossorigin="anonymous" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://upload.wikimedia.org" />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Press+Start+2P&display=swap"
       rel="stylesheet"
@@ -20,11 +23,15 @@
     <div id="app">
       <canvas id="globe"></canvas>
       <div class="dotgrid" aria-hidden="true"></div>
+      <svg id="leader" class="leader" aria-hidden="true" data-on="false">
+        <path id="leader-path" d="" />
+        <circle id="leader-dot" r="3.5" />
+      </svg>
 
       <header class="chrome">
         <div class="brand">
           <span class="pixel-mark">PINPLANET</span>
-          <span class="brand-sub">pinplanet.us · v1 proto</span>
+          <span class="brand-sub">pinplanet.us · v1.1</span>
         </div>
         <div class="status" id="status">
           <span class="led" id="led"></span>
@@ -33,10 +40,14 @@
           <span class="dim" id="status-hop"></span>
           <span class="sep">/</span>
           <span id="status-clock">00.0</span>
+          <span class="sep wide">/</span>
+          <span class="dim wide" id="status-pins">29 pins</span>
+          <span class="sep wide">/</span>
+          <span class="theme-name wide" id="status-theme">Tokyo Night</span>
         </div>
       </header>
 
-      <article class="card" id="card" data-open="false">
+      <article class="card" id="card" data-open="false" data-family="human">
         <div class="card-media" id="card-media">
           <div class="card-fallback" aria-hidden="true">
             <span class="card-coord-lg" id="card-coord-lg"></span>
@@ -45,6 +56,7 @@
           <img id="card-image" alt="" />
           <div class="card-scan" aria-hidden="true"></div>
           <div class="card-corners" aria-hidden="true"></div>
+          <div class="card-badges" id="card-badges"></div>
         </div>
         <div class="card-body">
           <div class="card-kicker">
@@ -53,21 +65,31 @@
           </div>
           <h2 id="card-title"></h2>
           <p id="card-fact"></p>
-          <a
-            id="card-link"
-            href="#"
-            target="_blank"
-            rel="noopener noreferrer"
-            >read the full story ↗</a
-          >
+          <div class="card-foot">
+            <a id="card-link" href="#" target="_blank" rel="noopener noreferrer">read the full story ↗</a>
+            <span class="card-credit" id="card-credit"></span>
+          </div>
         </div>
       </article>
 
+      <div class="toast" id="toast" data-on="false"></div>
+
       <footer class="dock">
-        <div class="hint dim">
-          drag to orbit · <kbd>space</kbd> jumps now
+        <div class="dock-left">
+          <div class="legend" aria-label="pin colours">
+            <span class="sw nature"></span>nature
+            <span class="sw human"></span>history
+            <span class="sw live"></span>live
+          </div>
+          <div class="hint dim">
+            drag to orbit · click a pin · <kbd>space</kbd> jump · <kbd>T</kbd> theme · <kbd>P</kbd> pause
+          </div>
         </div>
-        <button type="button" id="surprise">Surprise me</button>
+        <div class="dock-right">
+          <button type="button" id="theme" class="ghost" title="Next theme (T)">Theme</button>
+          <button type="button" id="pause" class="ghost" title="Pause / resume (P)" data-paused="false">Pause</button>
+          <button type="button" id="surprise" title="Jump now (space)">Surprise me</button>
+        </div>
       </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>

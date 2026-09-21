@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { easeCinematic, latLngToVector3, slerpDir } from "./geo";
 import { glowTexture } from "./glow";
-import { dwellDistance, flightDuration, flightLift, globeRadius, theme } from "./theme";
+import { dwellDistance, flightDuration, flightLift, globeRadius } from "./theme";
+import type { Theme } from "./themes";
 import type { Pin } from "./types";
 
 export type FlightPhase = "idle" | "flying";
@@ -72,6 +73,9 @@ export class FlightRig {
   private fadeCore: THREE.Mesh | null = null;
   private fadeGlow: THREE.Mesh | null = null;
   private trailCurve: RaisedArcCurve | null = null;
+  private colorCore = 0x7dcfff;
+  private colorGlow = 0x7aa2f7;
+  private additive = true;
 
   private fromDir = new THREE.Vector3(0, 0, 1);
   private toDir = new THREE.Vector3(0, 0, 1);
@@ -91,7 +95,7 @@ export class FlightRig {
     this.spark = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: glowTexture(),
-        color: theme.cyan,
+        color: this.colorCore,
         transparent: true,
         opacity: 0,
         depthWrite: false,
@@ -101,6 +105,33 @@ export class FlightRig {
     this.spark.scale.setScalar(0.18);
     this.spark.visible = false;
     this.earth.add(this.spark);
+  }
+
+  applyTheme(theme: Theme): void {
+    this.colorCore = theme.globe.trailCore;
+    this.colorGlow = theme.globe.trailGlow;
+    this.additive = theme.globe.additive;
+    const sparkMat = this.spark.material as THREE.SpriteMaterial;
+    sparkMat.color.setHex(this.colorCore);
+    sparkMat.blending = this.additive ? THREE.AdditiveBlending : THREE.NormalBlending;
+    sparkMat.needsUpdate = true;
+    for (const [mesh, color] of [
+      [this.trailCore, this.colorCore],
+      [this.fadeCore, this.colorCore],
+      [this.trailGlow, this.colorGlow],
+      [this.fadeGlow, this.colorGlow],
+    ] as const) {
+      if (!mesh) continue;
+      const mat = mesh.material as THREE.ShaderMaterial;
+      (mat.uniforms.uColor!.value as THREE.Color).setHex(color);
+      mat.blending = this.additive ? THREE.AdditiveBlending : THREE.NormalBlending;
+      mat.needsUpdate = true;
+    }
+  }
+
+  /** Where the camera currently looks from, as a unit direction. */
+  viewDir(target = new THREE.Vector3()): THREE.Vector3 {
+    return target.copy(this.camera.position).normalize();
   }
 
   start(from: Pin | null, to: Pin, duration = flightDuration): void {
@@ -214,14 +245,8 @@ export class FlightRig {
   }
 
   private makeTrail(curve: RaisedArcCurve): { core: THREE.Mesh; glow: THREE.Mesh } {
-    const core = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, 180, 0.009, 8, false),
-      this.trailMaterial(theme.cyan, 0.95),
-    );
-    const glow = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, 180, 0.028, 10, false),
-      this.trailMaterial(theme.blue, 0.38),
-    );
+    const core = new THREE.Mesh(new THREE.TubeGeometry(curve, 180, 0.009, 8, false), this.trailMaterial(this.colorCore, 0.95));
+    const glow = new THREE.Mesh(new THREE.TubeGeometry(curve, 180, 0.028, 10, false), this.trailMaterial(this.colorGlow, 0.38));
     core.renderOrder = 3;
     glow.renderOrder = 2;
     return { core, glow };
@@ -231,7 +256,7 @@ export class FlightRig {
     return new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: this.additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       side: THREE.DoubleSide,
       uniforms: {
         uProgress: { value: 0 },
@@ -244,9 +269,7 @@ export class FlightRig {
   }
 
   private drawTrail(t: number): void {
-    const mats = [this.trailCore, this.trailGlow].map(
-      (mesh) => mesh?.material as THREE.ShaderMaterial | undefined,
-    );
+    const mats = [this.trailCore, this.trailGlow].map((mesh) => mesh?.material as THREE.ShaderMaterial | undefined);
     for (const mat of mats) {
       if (mat) mat.uniforms.uProgress!.value = t;
     }
