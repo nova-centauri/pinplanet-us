@@ -12,10 +12,17 @@ type MultiPolygon = Polygon[];
  * that fall on land. Gives a recognizable dotted Earth without a texture.
  */
 export function buildLandPositions(count = 16000): Float32Array {
-  const land = feature(
+  const raw = feature(
     landTopo as never,
     (landTopo as { objects: { land: never } }).objects.land,
-  ) as unknown as { geometry: { type: string; coordinates: MultiPolygon | Polygon } };
+  ) as unknown as {
+    geometry?: { type: string; coordinates: MultiPolygon | Polygon };
+    features?: { geometry: { type: string; coordinates: MultiPolygon | Polygon } }[];
+  };
+  const geometry = raw.geometry ?? raw.features?.[0]?.geometry;
+  if (!geometry) {
+    throw new Error("world-atlas land geometry missing");
+  }
 
   const width = 1024;
   const height = 512;
@@ -30,9 +37,9 @@ export function buildLandPositions(count = 16000): Float32Array {
   ctx.fillStyle = "#fff";
 
   const polygons: MultiPolygon =
-    land.geometry.type === "Polygon"
-      ? [land.geometry.coordinates as Polygon]
-      : (land.geometry.coordinates as MultiPolygon);
+    geometry.type === "Polygon"
+      ? [geometry.coordinates as Polygon]
+      : (geometry.coordinates as MultiPolygon);
 
   for (const polygon of polygons) {
     ctx.beginPath();

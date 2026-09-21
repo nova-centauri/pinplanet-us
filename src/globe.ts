@@ -50,7 +50,12 @@ export class GlobeScene {
 
     this.addStars();
     this.addGlobeBody();
-    this.addLand();
+    try {
+      this.addLand();
+    } catch (error) {
+      console.warn("Land point-cloud failed; using sparse sphere", error);
+      this.addFallbackDots();
+    }
     this.addAtmosphere();
 
     window.addEventListener("resize", () => this.resize());
@@ -161,6 +166,9 @@ export class GlobeScene {
 
   private addLand(): void {
     const positions = buildLandPositions(15500);
+    if (positions.length < 900) {
+      throw new Error(`Land point-cloud too sparse (${positions.length / 3} points)`);
+    }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const points = new THREE.Points(
@@ -175,6 +183,35 @@ export class GlobeScene {
       }),
     );
     this.earth.add(points);
+  }
+
+  private addFallbackDots(): void {
+    const count = 6000;
+    const positions = new Float32Array(count * 3);
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < count; i++) {
+      const y = 1 - (i / (count - 1)) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = golden * i;
+      positions[i * 3] = globeRadius * r * Math.cos(theta);
+      positions[i * 3 + 1] = globeRadius * y;
+      positions[i * 3 + 2] = globeRadius * r * Math.sin(theta);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    this.earth.add(
+      new THREE.Points(
+        geometry,
+        new THREE.PointsMaterial({
+          color: theme.fg,
+          size: 0.013,
+          sizeAttenuation: true,
+          transparent: true,
+          opacity: 0.7,
+          depthWrite: false,
+        }),
+      ),
+    );
   }
 
   private addAtmosphere(): void {
