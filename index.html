@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PinPlanet</title>
+    <meta
+      name="description"
+      content="A 3D globe that auto-tours the planet, pin by pin."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="globe"></canvas>
+      <div class="dotgrid" aria-hidden="true"></div>
+
+      <header class="chrome">
+        <div class="brand">
+          <span class="pixel-mark">PINPLANET</span>
+          <span class="brand-sub">pinplanet.us · v1 proto</span>
+        </div>
+        <div class="status" id="status">
+          <span class="led" id="led"></span>
+          <span id="status-mode">AUTO-TOUR</span>
+          <span class="dim" id="status-hop"></span>
+        </div>
+      </header>
+
+      <article class="card" id="card" data-open="false">
+        <div class="card-media" id="card-media">
+          <img id="card-image" alt="" />
+          <div class="card-scan" aria-hidden="true"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-kicker">
+            <span id="card-category">site</span>
+            <span class="dim" id="card-meta"></span>
+          </div>
+          <h2 id="card-title"></h2>
+          <p id="card-fact"></p>
+          <a
+            id="card-link"
+            href="#"
+            target="_blank"
+            rel="noopener noreferrer"
+            >read the full story ↗</a
+          >
+        </div>
+      </article>
+
+      <footer class="dock">
+        <div class="hint dim">
+          drag to orbit · <kbd>space</kbd> jumps now
+        </div>
+        <button type="button" id="surprise">Surprise me</button>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
