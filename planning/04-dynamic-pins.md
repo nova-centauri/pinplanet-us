@@ -3,84 +3,94 @@
 How the app adds pins on its own while running. The goal: the globe never
 goes stale, and every fresh pin still passes the tight-location rule.
 
+**Status (V1.1):** the provider architecture is built (`src/providers/`),
+four providers are live, and the pool/expiry/localStorage layer is in place.
+The trending-topics provider and its review queue are still open.
+
 ## Architecture: pin providers
 
 Each source is a **provider**: a small module with one job —
 
 ```
-fetch() -> list[Pin]      # returns pins in the schema from 02-pin-schema.md
-ttl                       # how long its pins stay in the pool
+fetch() -> Pin[]      # pins in the schema from 02-pin-schema.md
+cadenceMs             # how often to poll while the page is open
+staleMs               # how long a stored result may be reused on load
 ```
 
-The app loads `data/seed-pins.json` at startup (these never expire), then
-polls each provider on its own cadence and merges results into one pin pool.
-`localStorage` caches the pool so repeat visits feel instant.
+Startup order: bundled seeds render immediately → `public/data/pins.json`
+(the build-time cache, see `06-data-sources.md`) merges in one fetch →
+each provider first replays its last result from `localStorage`, then polls on
+its own cadence. Pins carry their own `expires`; the pool sweeps every minute.
 
-### Provider 1 — USGS earthquakes (`natural disaster`)
+### Provider 1 — USGS earthquakes (`earthquake`, live) ✅
 
-- **Source:** USGS Earthquake API, no key needed:
-  `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=4.5`
-- **Why it works:** every quake arrives with a tight epicenter, magnitude,
-  depth, and timestamp. Zero curation needed.
-- **Pin shape:** title = `"M6.2 earthquake — 40 km off the coast of …"`,
-  fact = magnitude + depth + nearest named place, link = the USGS event page.
-- **TTL:** 7 days. **Cadence:** every 15 minutes.
+- **Source:** `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson`
+  — no key, CORS enabled, updated every minute.
+- **Pin shape:** title `M6.2 · 40 km SW of Ōita, Japan`, fact = magnitude,
+  depth, how long ago, tsunami advisory / felt reports / alert level, plus a
+  one-line "what a magnitude N quake means". Link = the USGS event page.
+- **TTL:** 7 days. **Cadence:** 15 min. Top 80 by magnitude.
+- **Breaking:** a fresh M6+ (< 6 h old, not yet shown) may cut in line once.
 
-### Provider 2 — Random towns (`random place`)
+### Provider 2 — NASA EONET natural events (`volcano` / `natural disaster`, live) ✅
 
-- **Source:** GeoNames API (free tier): random populated place with
-  `population < 10,000`.
-- **Story:** hit the Wikipedia API with the town name; take the first two
-  sentences of the summary as the "why it exists" story. Fallback fact
-  template: *"A town of N people in {region}, founded {year}."*
-  (year comes from the Wikipedia text when available, else omitted).
-- **Cadence:** one new town per day, kept as "today's random town". Old ones
-  retire after 7 days so the pool keeps breathing.
-- **Tight-location note:** towns are the *one* category exempt from the
-  tight-location rule — the town itself is the point.
+- **Source:** `https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=45`
+  — open events: erupting volcanoes, wildfires, severe storms, floods, sea
+  ice, icebergs. Public domain, CORS enabled.
+- **Pin shape:** latest geometry point of the event; fact = type, when it was
+  reported, size (acres / kts / km²) and the number of observations. Link =
+  the first source URL (IRWIN, NHC, JTWC, GDACS…) or the EONET page.
+- **TTL:** 3 days from the last observation. **Cadence:** hourly. Top 45 by
+  type weight (volcanoes and storms first) and recency.
 
-### Provider 3 — Trending topics (`current topic`)
+### Provider 3 — The ISS (`science`, live, moving) ✅
 
-- **Source:** the hackathon's "last 30 days" trending skill (whatever feed it
-  returns: topics + links + timestamps).
-- **Pipeline:**
-  1. Extract every location mentioned in each trending item.
-  2. Geocode each candidate.
-  3. **Tightness filter** (the star of the show):
-     - ✅ keep: venue / landmark / address / coordinates
-       ("the Catacombs of Paris" → keep)
-     - ❌ drop: city / state / country / metro ("Paris" → drop)
-     - gray zone (neighborhood/region): keep **iff** it has a Wikipedia
-       article with coordinates, else drop
-  4. Survivors become `current topic` pins; the trending story is the link.
-- **TTL:** 30 days (matches the feed window). **Cadence:** hourly.
-- **Review queue:** dropped-but-interesting items land in a small on-page
-  queue Steve can glance at and rescue by hand — one click promotes a
-  rejected item to a curated pin.
+- **Source:** `https://api.wheretheiss.at/v1/satellites/25544` — CORS
+  enabled, no key, position every 12 s while the tab is visible.
+- **Pin shape:** one pin, id `iss-live`, that moves across the globe; fact =
+  altitude, speed, daylight/eclipse. When the tour lands on it, the marker
+  keeps following the station.
 
-### Provider 4 — Wikipedia "on this day" (`historical`, optional stretch)
+### Provider 4 — Wikipedia "on this day" (`historical`) ✅
 
-- The Wikipedia On-This-Day API returns historical events; cross-reference
-  each with the Wikipedia geo API and keep only those with tight coordinates.
-- Nice-to-have for week one; cut it if time gets tight.
+- **Build time:** all 366 days are already in the cache, two events per day,
+  tagged `day: "MM-DD"`. Today's get a 6× tour weight and a *TODAY IN
+  HISTORY* badge — no fetch needed.
+- **Runtime:** `feed/onthisday/events/MM/DD` for the current date adds up to
+  eight more events (TTL: midnight). Same tightness classifier
+  (`src/otd.ts`) at build and at runtime.
+
+### Provider 5 — Random towns (`random place`) — partially covered
+
+- The plan called for GeoNames + Wikipedia. Instead, the cache carries ~200
+  ghost towns, remote outposts and silly-name towns from Wikidata and a
+  hand-picked list. A "town of the day" from GeoNames is still open.
+
+### Provider 6 — Trending topics (`current topic`) — open
+
+- Needs the hackathon trending feed's actual response shape. The tightness
+  filter it needs already exists (`isTightDescription`), so the remaining
+  work is geocoding + the review queue.
 
 ## Pool rules (apply to every provider)
 
-1. **Dedupe:** a new pin within ~25 km of an existing pin in the same
-   category is merged, not added. Newest source wins the fact text.
-2. **Freshness:** expired pins leave the pool silently. Seeds never expire.
-3. **Choreography:** the tour engine never jumps twice in a row to the same
-   continent and interleaves categories (no volcano-after-volcano).
-4. **Breaking pins:** a fresh `natural disaster` pin may interrupt the tour
-   once with a subtle pulse — disasters are the only category allowed to
-   cut in line.
-5. **Offline:** if all providers fail, the app tours on seeds alone and says
-   nothing. The globe must never look broken.
+1. **Dedupe:** the build merges same-article pins and same-category pins within
+   20 km; at runtime the pool is keyed by id, and live pins refresh in place.
+2. **Freshness:** expired pins leave the pool silently. Seeds and cached pins
+   never expire.
+3. **Choreography:** the tour never jumps twice in a row to the same continent
+   (hard rule) and interleaves categories: airtime per category ∝ √(size), the
+   previous category is down-weighted 8×, recent pins (last 60) are skipped.
+4. **Breaking pins:** a fresh major earthquake may interrupt the tour once with
+   a "Breaking" toast — disasters are the only category allowed to cut in line.
+5. **Offline:** if the cache fetch and every provider fail, the app tours on
+   the 29 seeds and says nothing beyond a console line. The globe never looks
+   broken.
 
-## What to build first (priority order)
+## What to build next (priority order)
 
-1. Seeds + tour engine (no providers) — the demo works on day one.
-2. USGS provider — easiest, most reliable, most dramatic.
-3. Random towns — the crowd-pleaser.
-4. Trending + tightness filter — the differentiator; needs the hackathon
-   skill's actual response shape before finalizing.
+1. Trending + tightness filter — the differentiator; needs the feed shape.
+2. GeoNames "town of the day".
+3. GDACS (floods/cyclones with alert levels) if EONET proves too quiet.
+4. Smithsonian weekly volcanic activity report through a tiny proxy (GVP has
+   no CORS) for richer "erupting now" text.

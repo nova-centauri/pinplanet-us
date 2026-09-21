@@ -1,12 +1,13 @@
 # PinPlanet
 
 A single-window 3D globe that auto-tours the planet, swooping from pin to pin.
-Each landing pops a fact card. This repo's app is a **V1 animation prototype**
-— the jump is the show; live data providers, themes, sound, and deploy are out
-of scope.
+Each landing pops a fact card. **V1.1** adds a 3,296-pin cached pool built
+from open data (volcanoes, battlefields, fossils, craters, meteorites,
+shipwrecks, ancient sites, world records, 334 moments in time…), four live
+feeds (earthquakes, NASA natural events, the ISS, today in history), ten
+colour themes and a visual pass.
 
-Planning notes still live in `planning/`. Curated seed pins live in
-`data/seed-pins.json`.
+Planning notes live in `planning/` — start with `planning/README.md`.
 
 ## Run locally
 
@@ -18,9 +19,10 @@ npm run dev
 Open the URL Vite prints (usually [http://localhost:5173](http://localhost:5173)).
 
 ```bash
-npm test           # continent-hop rule
-npm run build      # typecheck + production bundle
-npm run preview    # serve the built files
+npm test             # tour rules, tightness filter, text cleaning, cache contract
+npm run build        # typecheck + production bundle
+npm run preview      # serve the built files
+npm run cache:build  # regenerate public/data/pins.json from the open-data sources (~10 min)
 ```
 
 CI (detect → install/test/build) runs on every push and PR. A green push to
@@ -29,15 +31,51 @@ CI (detect → install/test/build) runs on every push and PR. A green push to
 `DEPLOY_WEBHOOK_SECRET` are set. Missing secrets warn and skip; they do not
 fail the run.
 
-## What V1 does
+## What it does
 
-- Full-viewport **point-cloud globe** (Tokyo Night palette, coast-lit dots, atmosphere glow)
-- Auto-tour on by default: cinematic camera hop (ease, altitude, slight roll) + additive trail
-- **Continent rule:** every hop lands on a different continent than the last pin
-- Dwell ~6s so the info card can be read (title, fact, date, Wikipedia still when available)
-- Idle slow spin + pin pulse — meant to sit open like a screensaver
-- Drag to orbit while idle · **Surprise me** / `space` jumps immediately
+- Full-viewport **point-cloud globe** with real day/night shading, atmosphere
+  glow, two star layers
+- Auto-tour on by default: cinematic camera hop (ease, altitude, slight roll)
+  + additive trail, then a dwell that scales with the fact length
+- **Continent rule:** every hop lands on a different continent than the last
+  pin; categories are interleaved so a volcano is rarely followed by a volcano
+- **3,296 cached pins** in two static files (a 1,400-pin core, then the rest after the first landing), so the tour is running the full
+  pool ~200 ms after first paint — no API on the critical path
+- **Live layer:** USGS quakes (15 min), NASA EONET events (hourly), the ISS
+  (moves every 12 s), today's history; cached in `localStorage`, expires on
+  its own, never blocks
+- **Ten themes** — `T` cycles, `Shift+T` goes back, the choice is remembered
+- Card: thumbnail (cached), category pill, LIVE / TODAY IN HISTORY / ERUPTING /
+  year badges, coordinates, story link, text credit; a leader line ties the
+  card to the pin
+- Drag to orbit · click a pin · `space` jumps now · `P` pauses
 
-Pins are the 29 curated seeds, tagged with a continent in the app layer.
-Card images try the Wikipedia page thumbnail and fall back to a coordinate panel.
-There is no audio.
+## Keys
+
+| Key | Action |
+|---|---|
+| `space` | jump now |
+| `T` / `Shift+T` | next / previous theme |
+| `P` | pause / resume |
+
+## Data & attribution
+
+Full detail in `planning/06-data-sources.md`. In short:
+
+- **Wikidata** (CC0) selects the things; **Wikipedia** (CC BY-SA 4.0) supplies
+  intro text, thumbnails and the "on this day" events — credited on every card
+- **Smithsonian Global Volcanism Program** — volcano data and photos, cited
+  as *Global Volcanism Program, Smithsonian Institution*
+- **Paleobiology Database** (CC BY 4.0) — fossil occurrences
+- **USGS**, **NASA EONET**, **Where the ISS at?** — live feeds, public domain
+- **Natural Earth** (public domain) — coastlines and continent polygons
+
+## Layout
+
+```
+data/seed-pins.json        29 hand-curated seeds (bundled)
+public/data/pins.json      generated core pool (1,400 pins) · pins-extra.json (1,896 more) · pins.meta.json
+scripts/cache/             the builder: http layer, wikidata/wikipedia helpers, one file per source
+src/                       app: globe, flight, themes, tour, providers, HUD
+planning/                  concept, schema, sources, roadmap
+```

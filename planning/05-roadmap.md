@@ -1,40 +1,50 @@
-# PinPlanet — one-week roadmap
+# PinPlanet — roadmap
 
-## Day 1 (Mon) — Foundation ✅ in progress
+## Week one (V1) — done
+
 - [x] Name locked: PinPlanet, pinplanet.us
 - [x] Repo + planning docs + 29 seed pins
-- [ ] Globe prototype: Three.js sphere, atmosphere glow, slow rotation
+- [x] Globe prototype: point-cloud land, atmosphere glow, slow rotation
+- [x] Pin markers on the globe (glowing dots + pulse)
+- [x] Camera fly-to animation between pins (the money moment)
+- [x] Fact card UI: title, fact, read-more link (new tab)
+- [x] Auto-tour engine: timed jumps, continent alternation
+- [x] Drag-to-explore
+- [x] "Surprise me" button
+- [x] CI (test + build) and the VPS deploy webhook
 
-## Day 2 (Tue) — The jump
-- [ ] Pin markers on the globe (glowing dots + pulse)
-- [ ] Camera fly-to animation between pins (the money moment)
-- [ ] Fact card UI: title, fact, read-more link (new tab)
+## V1.1 — data, themes, visuals — done
 
-## Day 3 (Wed) — The tour
-- [ ] Auto-tour engine: timed jumps, continent alternation, category interleave
-- [ ] Drag-to-explore + click-a-pin
-- [ ] "Surprise me" button
+- [x] **Cache builder** (`scripts/cache/`): Wikidata + Wikipedia, Smithsonian
+      GVP volcanoes, Paleobiology Database fossils, Wikipedia on-this-day ×366,
+      ~1,300 hand-picked titles → `public/data/pins.json` (3,296 pins)
+- [x] Tight-location classifier shared by build and runtime
+- [x] Live providers: USGS quakes, NASA EONET, ISS position, today-in-history
+- [x] Pin pool merge + expiry + `localStorage` cache
+- [x] Category interleave + √-weighting + today boost + breaking-quake cut-in
+- [x] Ten themes, `T` to cycle, persisted
+- [x] Visual pass: single-draw-call pin cloud, active marker, leader line,
+      real day/night shading, badges, credits, legend, counters, dynamic dwell
+- [x] Click a pin to fly there; `P` to pause
+- [x] Tests: cache contract (≥ 1,000, schema), tightness filter, tour
+      weighting, text cleaning
+- [x] Docs: `06-data-sources.md`, `07-themes-and-visuals.md`
 
-## Day 4 (Thu) — Dynamic pins I
-- [ ] USGS earthquake provider (natural disaster pins, live)
-- [ ] Pin pool merge + expiry + localStorage cache
+## Next
 
-## Day 5 (Fri) — Dynamic pins II
-- [ ] Random-town provider (GeoNames + Wikipedia story)
-- [ ] Trending feed + tightness filter (needs the hackathon skill's shape)
-- [ ] Review queue for rescued pins
-
-## Day 6 (Sat) — Polish
+- [ ] Trending feed + review queue (`current topic`) — needs the hackathon
+      skill's response shape
+- [ ] GeoNames "town of the day"
 - [ ] Sound: subtle whoosh on jump, ambient pad (mutable, off by default)
-- [ ] Loading / offline states that never look broken
-- [ ] Mobile-ish responsiveness (it'll be demoed on a laptop, but still)
-- [ ] Deploy to pinplanet.us
+- [ ] Mobile polish: bottom-sheet card, larger tap targets
+- [ ] Deploy to pinplanet.us and set the two webhook secrets
+- [ ] Monthly `npm run cache:build` (GitHub Action on a schedule → PR)
+- [ ] Sitemap / share links (`?pin=<id>` deep links)
+- [ ] Optional: same-continent hops on click (relax the V1 rule for manual
+      picks only)
 
-## Day 7 (Sun) — Demo day
-- [ ] 60-second demo script: auto-tour does the talking
-- [ ] Buffer for whatever broke on Saturday
+## Cut list (if time gets short)
 
-## Cut list (if the week gets short)
-Cut in this order: Wikipedia on-this-day → sound → trending filter
-(keep the review queue) → random towns. Never cut: the jump animation,
-the seed pins, the fact-card writing quality.
+Cut in this order: sound → trending filter (keep the review queue) → GeoNames
+towns. Never cut: the jump animation, the seed pins, the fact-card writing
+quality, the cached pool.
