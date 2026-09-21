@@ -18,9 +18,16 @@ npm run dev
 Open the URL Vite prints (usually [http://localhost:5173](http://localhost:5173)).
 
 ```bash
+npm test           # continent-hop rule
 npm run build      # typecheck + production bundle
 npm run preview    # serve the built files
 ```
+
+CI (detect → install/test/build) runs on every push and PR. A green push to
+`main` notifies VPS-01 via a signed GitHub-shaped webhook at
+`https://pinplanet.us/hooks/pinplanet-deploy` once `DEPLOY_WEBHOOK_URL` and
+`DEPLOY_WEBHOOK_SECRET` are set. Missing secrets warn and skip; they do not
+fail the run.
 
 ## What V1 does
 

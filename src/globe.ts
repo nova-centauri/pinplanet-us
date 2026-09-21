@@ -32,7 +32,7 @@ void main() {
   vFacing = max(dot(n, viewDir), 0.0);
   vec4 mv = viewMatrix * world;
   float dist = max(-mv.z, 1.4);
-  gl_PointSize = max(1.25, aSize * uScale * uPixelRatio * (9.0 / dist));
+  gl_PointSize = max(1.25, aSize * uScale * uPixelRatio * (9.8 / dist));
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -352,8 +352,8 @@ export class GlobeScene {
         side: THREE.FrontSide,
         uniforms: {
           uColor: { value: new THREE.Color(0x7dcfff) },
-          uPower: { value: 3.4 },
-          uStrength: { value: 0.22 },
+          uPower: { value: 3.2 },
+          uStrength: { value: 0.28 },
         },
         vertexShader: rimVert,
         fragmentShader: frag,
@@ -369,8 +369,8 @@ export class GlobeScene {
         side: THREE.BackSide,
         uniforms: {
           uColor: { value: new THREE.Color(0x7aa2f7) },
-          uPower: { value: 2.15 },
-          uStrength: { value: 0.38 },
+          uPower: { value: 2.05 },
+          uStrength: { value: 0.46 },
         },
         vertexShader: rimVert,
         fragmentShader: frag,
