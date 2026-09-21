@@ -9,13 +9,16 @@ type MultiPolygon = Polygon[];
 
 export interface LandCloud {
   positions: Float32Array;
-  colors: Float32Array;
+  /** 0 = interior, 1 = coast, 2 = ice (Antarctica / Greenland interior) */
+  kind: Float32Array;
+  /** coast strength 0..1 — how much ocean surrounds the sample */
+  coast: Float32Array;
   sizes: Float32Array;
 }
 
 /**
- * Rasterize Natural Earth land and sample a Fibonacci cloud.
- * Coast pixels get cyan and a little extra size so continents have an edge.
+ * Rasterize Natural Earth land and sample a Fibonacci cloud. Colour is
+ * decided in the shader from the theme, so only classification lives here.
  */
 export function buildLandCloud(count = 24000): LandCloud {
   const raw = feature(
@@ -37,11 +40,7 @@ export function buildLandCloud(count = 24000): LandCloud {
   canvas.height = height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) {
-    return {
-      positions: new Float32Array(0),
-      colors: new Float32Array(0),
-      sizes: new Float32Array(0),
-    };
+    return { positions: new Float32Array(0), kind: new Float32Array(0), coast: new Float32Array(0), sizes: new Float32Array(0) };
   }
 
   ctx.fillStyle = "#000";
@@ -56,13 +55,20 @@ export function buildLandCloud(count = 24000): LandCloud {
   for (const polygon of polygons) {
     ctx.beginPath();
     for (const ring of polygon) {
-      ring.forEach(([lng, lat], i) => {
-        const x = ((lng + 180) / 360) * width;
-        const y = ((90 - lat) / 180) * height;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.closePath();
+      // Unwrap rings that cross the antimeridian (Fiji, Chukotka…): a raw
+      // lineTo from 179.9° to −179.9° would sweep a sliver across the whole
+      // map. Draw the unwrapped ring at three offsets; the canvas clips.
+      const unwrapped = unwrapRing(ring);
+      const crosses = unwrapped.some(([lng]) => lng > 180 || lng < -180);
+      for (const offset of crosses ? [-360, 0, 360] : [0]) {
+        unwrapped.forEach(([lng, lat], i) => {
+          const x = ((lng + offset + 180) / 360) * width;
+          const y = ((90 - lat) / 180) * height;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+      }
     }
     ctx.fill("evenodd");
   }
@@ -74,28 +80,27 @@ export function buildLandCloud(count = 24000): LandCloud {
     return pixels[(yy * width + xx) * 4]! > 128;
   };
 
+  const NEIGHBOURS = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+    [2, 0],
+    [-2, 0],
+    [0, 2],
+    [0, -2],
+  ] as const;
   const coastAt = (x: number, y: number): number => {
     let ocean = 0;
-    const n = [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-      [2, 0],
-      [-2, 0],
-      [0, 2],
-      [0, -2],
-    ];
-    for (const [dx, dy] of n) {
-      if (!landAt(x + dx, y + dy)) ocean += 1;
-    }
-    return ocean / n.length;
+    for (const [dx, dy] of NEIGHBOURS) if (!landAt(x + dx, y + dy)) ocean += 1;
+    return ocean / NEIGHBOURS.length;
   };
 
   const golden = Math.PI * (3 - Math.sqrt(5));
   const probe = Math.floor(count * 2.8);
   const positions: number[] = [];
-  const colors: number[] = [];
+  const kind: number[] = [];
+  const coast: number[] = [];
   const sizes: number[] = [];
 
   for (let i = 0; i < probe && positions.length / 3 < count; i++) {
@@ -110,30 +115,52 @@ export function buildLandCloud(count = 24000): LandCloud {
     const py = Math.floor(((90 - lat) / 180) * height);
     if (!landAt(px, py)) continue;
 
-    const coast = coastAt(px, py);
+    const c = coastAt(px, py);
     const v = latLngToVector3(lat, lng, globeRadius);
     positions.push(v.x, v.y, v.z);
 
-    if (coast > 0.2) {
-      const k = Math.min(1, coast * 1.4);
-      colors.push(0.58 + 0.22 * k, 0.74 + 0.16 * k, 1.0);
+    if (c > 0.2) {
+      const k = Math.min(1, c * 1.4);
+      kind.push(1);
+      coast.push(k);
       sizes.push(1.12 + k * 0.28);
-    } else if (lat < -62) {
-      colors.push(0.82, 0.86, 0.96);
+    } else if (lat < -62 || (lat > 72 && lng > -60 && lng < -20)) {
+      kind.push(2);
+      coast.push(0);
       sizes.push(0.92);
     } else {
-      colors.push(0.74, 0.79, 0.96);
+      kind.push(0);
+      coast.push(0);
       sizes.push(0.9 + Math.random() * 0.1);
     }
   }
 
   return {
     positions: new Float32Array(positions),
-    colors: new Float32Array(colors),
+    kind: new Float32Array(kind),
+    coast: new Float32Array(coast),
     sizes: new Float32Array(sizes),
   };
 }
 
 function clamp(n: number): number {
   return Math.min(1, Math.max(-1, n));
+}
+
+/** Shift longitudes so no consecutive pair jumps more than 180°. */
+function unwrapRing(ring: Ring): Ring {
+  const out: Ring = [];
+  let shift = 0;
+  let prev: number | null = null;
+  for (const [lng, lat] of ring) {
+    if (prev !== null) {
+      const d = lng + shift - prev;
+      if (d > 180) shift -= 360;
+      else if (d < -180) shift += 360;
+    }
+    const x = lng + shift;
+    out.push([x, lat]);
+    prev = x;
+  }
+  return out;
 }

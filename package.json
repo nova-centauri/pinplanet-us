@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "tsx --test src/tour.test.ts",
+    "test": "tsx --test \"src/**/*.test.ts\" \"scripts/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cache:build": "tsx scripts/cache/build.ts",
+    "cache:dev": "tsx scripts/cache/build.ts --limit=12"
   },
   "dependencies": {
     "three": "^0.170.0",
@@ -15,6 +18,7 @@
     "world-atlas": "^2.0.2"
   },
   "devDependencies": {
+    "@types/node": "^22.20.4",
     "@types/three": "^0.170.0",
     "@types/topojson-client": "^3.1.5",
     "tsx": "^4.19.3",

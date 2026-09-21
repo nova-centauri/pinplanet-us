@@ -1,38 +1,88 @@
 import type { Pin } from "./types";
 
 /**
- * Hard V1 rule: every jump lands on a different continent than the pin
- * we just left. Recent IDs are only a variety hint — they never override
- * the continent constraint.
+ * Tour choreography.
+ *
+ * Hard rule (V1): every jump lands on a different continent than the pin we
+ * just left. Soft rules layered on top for a big pool:
+ *  - categories are interleaved (a volcano is rarely followed by a volcano)
+ *  - each category gets airtime ∝ √(its size), so 700 history pins don't
+ *    drown 40 shipwrecks, and 1 event pin doesn't repeat every minute
+ *  - fame (rank) nudges, live pins and "today in history" pins get a boost
+ *  - recently shown pins are skipped while alternatives exist
  */
+
+export interface PickOptions {
+  today?: string; // "MM-DD"
+  now?: number;
+  random?: () => number;
+}
+
 export function pickNextPin(
   pins: Pin[],
   previous: Pin | null,
   recentIds: readonly string[] = [],
+  opts: PickOptions = {},
 ): Pin {
-  if (pins.length === 0) {
-    throw new Error("No pins available");
-  }
+  if (pins.length === 0) throw new Error("No pins available");
+  const random = opts.random ?? Math.random;
   if (!previous) {
-    return pins[Math.floor(Math.random() * pins.length)]!;
+    const weighted = pins.map((p) => ({ p, w: 0.4 + p.rank }));
+    return sample(weighted, random) ?? pins[0]!;
   }
 
   const otherContinent = pins.filter((pin) => pin.continent !== previous.continent);
   if (otherContinent.length === 0) {
-    throw new Error(
-      `Continent rule: no pin exists on a different continent than ${previous.continent}`,
-    );
+    throw new Error(`Continent rule: no pin exists on a different continent than ${previous.continent}`);
   }
 
-  const unseen = otherContinent.filter((pin) => !recentIds.includes(pin.id));
+  const recent = new Set(recentIds);
+  const unseen = otherContinent.filter((pin) => !recent.has(pin.id));
   const pool = unseen.length > 0 ? unseen : otherContinent;
-  return pool[Math.floor(Math.random() * pool.length)]!;
+
+  const counts = new Map<string, number>();
+  for (const pin of pool) counts.set(pin.category, (counts.get(pin.category) ?? 0) + 1);
+
+  const now = opts.now ?? Date.now();
+  const weighted = pool.map((pin) => ({ p: pin, w: weightOf(pin, previous, counts, opts.today, now) }));
+  return sample(weighted, random) ?? pool[Math.floor(random() * pool.length)]!;
+}
+
+function weightOf(pin: Pin, previous: Pin, counts: Map<string, number>, today: string | undefined, now: number): number {
+  const n = counts.get(pin.category) ?? 1;
+  // Category airtime ∝ sqrt(size): each pin's share is sqrt(n)/n.
+  let w = Math.sqrt(n) / n;
+  w *= 0.55 + 0.9 * pin.rank;
+  if (pin.category === previous.category) w *= 0.12;
+  if (pin.family === previous.family) w *= 0.7;
+  if (today && pin.day === today) w *= 6;
+  if (pin.live) {
+    const ageH = pin.when ? (now - pin.when) / 3_600_000 : 48;
+    w *= ageH < 6 ? 5 : ageH < 24 ? 3 : 1.8;
+  }
+  return w;
+}
+
+function sample<T>(items: { p: T; w: number }[], random: () => number): T | null {
+  let total = 0;
+  for (const it of items) total += it.w;
+  if (!(total > 0)) return null;
+  let r = random() * total;
+  for (const it of items) {
+    r -= it.w;
+    if (r <= 0) return it.p;
+  }
+  return items[items.length - 1]?.p ?? null;
 }
 
 export function assertContinentHop(from: Pin, to: Pin): void {
   if (from.continent === to.continent) {
-    throw new Error(
-      `Illegal hop ${from.id} → ${to.id}: both on ${from.continent}`,
-    );
+    throw new Error(`Illegal hop ${from.id} → ${to.id}: both on ${from.continent}`);
   }
+}
+
+/** Seconds to linger on a card: enough to read the fact, never a slog. */
+export function dwellFor(pin: Pin): number {
+  const chars = pin.fact.length + pin.title.length * 0.5;
+  return Math.min(12, Math.max(5.5, 3.6 + chars * 0.03));
 }
