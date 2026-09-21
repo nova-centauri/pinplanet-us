@@ -31,7 +31,8 @@ void main() {
   vec3 viewDir = normalize(cameraPosition - world.xyz);
   vFacing = max(dot(n, viewDir), 0.0);
   vec4 mv = viewMatrix * world;
-  gl_PointSize = aSize * uScale * uPixelRatio * (190.0 / max(1.2, -mv.z));
+  float dist = max(-mv.z, 1.4);
+  gl_PointSize = max(1.15, aSize * uScale * uPixelRatio * (6.4 / dist));
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -42,10 +43,10 @@ varying float vFacing;
 void main() {
   vec2 p = gl_PointCoord * 2.0 - 1.0;
   float d = dot(p, p);
-  if (d > 1.0) discard;
-  float soft = exp(-d * 3.4);
-  float depth = 0.18 + 0.82 * pow(vFacing, 0.55);
-  gl_FragColor = vec4(vColor, soft * depth);
+  if (d > 0.62) discard;
+  float core = 1.0 - smoothstep(0.08, 0.62, d);
+  float depth = 0.34 + 0.66 * pow(vFacing, 0.7);
+  gl_FragColor = vec4(vColor, core * depth * 0.92);
 }
 `;
 
@@ -173,7 +174,7 @@ export class GlobeScene {
           blending: THREE.AdditiveBlending,
         }),
       );
-      glowSprite.scale.setScalar(0.09);
+      glowSprite.scale.setScalar(0.07);
       glowSprite.position.set(0, 0, -0.02);
 
       const beam = new THREE.Mesh(
@@ -218,7 +219,7 @@ export class GlobeScene {
       haloMat.opacity = on ? 0.8 : 0.32;
       glowMat.color.setHex(on ? theme.orange : theme.cyan);
       marker.core.scale.setScalar(on ? 1.7 : 1);
-      marker.glow.scale.setScalar(on ? 0.2 : 0.09);
+      marker.glow.scale.setScalar(on ? 0.14 : 0.07);
       beamMat.opacity = on ? 0.7 : 0;
       beamMat.color.setHex(on ? theme.orange : theme.cyan);
     }
@@ -291,7 +292,7 @@ export class GlobeScene {
   }
 
   private addLand(): void {
-    const cloud = buildLandCloud(24000);
+    const cloud = buildLandCloud(20000);
     if (cloud.positions.length < 900) {
       throw new Error(`Land point-cloud too sparse (${cloud.positions.length / 3} points)`);
     }
