@@ -45,9 +45,14 @@ fail the run.
   (moves every 12 s), today's history; cached in `localStorage`, expires on
   its own, never blocks
 - **Ten themes** — `T` cycles, `Shift+T` goes back, the choice is remembered
-- Card: thumbnail (cached), category pill, LIVE / TODAY IN HISTORY / ERUPTING /
-  year badges, coordinates, story link, text credit; a leader line ties the
-  card to the pin
+- Card: **a picture on every pin** — the article photo when there is one,
+  otherwise a satellite view of the spot (Esri World Imagery, or Google with
+  a key), prefetched while the camera is still flying; category pill, LIVE /
+  TODAY IN HISTORY / ERUPTING / SATELLITE VIEW / year badges, coordinates,
+  story link, credits; a leader line ties the card to the pin
+- **History:** `H` opens the *Visited* panel (thumbnails, newest first);
+  click a row to fly back, `←` / `→` step through what you've seen; kept for
+  30 days
 - Drag to orbit · click a pin · `space` jumps now · `P` pauses
 
 ## Keys
@@ -55,6 +60,8 @@ fail the run.
 | Key | Action |
 |---|---|
 | `space` | jump now |
+| `←` / `→` | back / forward through visited pins |
+| `H` | visited-pins panel (`Esc` closes) |
 | `T` / `Shift+T` | next / previous theme |
 | `P` | pause / resume |
 
@@ -68,6 +75,9 @@ Full detail in `planning/06-data-sources.md`. In short:
   as *Global Volcanism Program, Smithsonian Institution*
 - **Paleobiology Database** (CC BY 4.0) — fossil occurrences
 - **USGS**, **NASA EONET**, **Where the ISS at?** — live feeds, public domain
+- **Esri World Imagery** (Esri, Maxar, Earthstar Geographics) — satellite
+  views for pins without a photo; set `VITE_GOOGLE_MAPS_KEY` at build time to
+  use Google Static Maps instead
 - **Natural Earth** (public domain) — coastlines and continent polygons
 
 ## Layout

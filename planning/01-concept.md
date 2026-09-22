@@ -46,8 +46,9 @@ Two streams, one globe:
 - **The jump is the show.** Never hard-cut between pins; always fly.
 - **The writing carries it.** Ten amazing facts beat fifty boring ones.
   Every fact must be surprising, visual, or funny — ideally all three.
-- **Choreography matters.** The tour never lands twice in a row on the same
-  continent, and it interleaves categories so a volcano isn't followed by
-  another volcano.
+- **Choreography matters.** The auto-tour never lands twice in a row on the
+  same continent, and it interleaves categories so a volcano isn't followed
+  by another volcano. (A pin you pick yourself — a click, a history row — can
+  be anywhere; the rule shapes the tour, not the user.)
 - **Every pin links somewhere real.** Wikipedia for facts, news sources for
   current topics. No dead ends.

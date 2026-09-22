@@ -17,7 +17,7 @@ render identically.
   "added": "2026-09-21",              // ISO date the pin entered the pool
   // ── added in V1.1 (all optional) ──
   "continent": "asia",                // precomputed at build time (Natural Earth polygons)
-  "image_url": "https://upload.wikimedia.org/…/640px-….jpg",  // card thumbnail, cached
+  "image_url": "https://upload.wikimedia.org/…/640px-….jpg",  // card photo; absent → satellite view (see Images)
   "year": 1971,                       // the moment in time; negative = BCE
   "day": "09-21",                     // MM-DD for on-this-day pins → "TODAY IN HISTORY"
   "credit": "Wikipedia · CC BY-SA 4.0", // text attribution shown on the card
@@ -47,7 +47,7 @@ render identically.
 
 | Category | Family | What belongs here | Example |
 |---|---|---|---|
-| `site` | history | A specific place you could visit; UNESCO sites; landmarks | Darvaza gas crater, Eiffel Tower |
+| `site` | history | A specific place you could visit: UNESCO sites, landmarks, castles, lighthouses, bridges, dams, towers, statues, temples, mines | Darvaza gas crater, Eiffel Tower |
 | `geography` | nature | Natural features & formations | Mariana Trench, Angel Falls |
 | `world record` | nature | Biggest / tallest / deepest / oldest | Burj Khalifa, Veryovkina Cave |
 | `volcano` | nature | Holocene volcanoes (GVP) | Mount Fuji |
@@ -62,12 +62,33 @@ render identically.
 | `event` | history | Scheduled happenings with a venue | Up Helly Aa |
 | `random fact` | history | The wild card — weird human stories | Monowi, pop. 1 |
 | `random place` | history | Ghost towns, remote outposts, silly-name towns | Pripyat, Hell (Michigan) |
-| `natural disaster` | live | Open NASA EONET events: wildfires, storms, floods | (live feed) |
+| `natural disaster` | nature / live | Historic tsunamis, floods, avalanches, landslides, eruptions, wildfires, tornadoes (cached); open NASA EONET events (live) | 2004 Indian Ocean tsunami; (live feed) |
 | `current topic` | live | Trending now, tight location | (not yet implemented) |
 
 *Family* is the colour on the globe and the card accent: **nature** (cyan in
 Tokyo Night), **history** (violet), **live** (orange, pulsing). The legend in
 the dock is generated from the theme.
+
+## Images (V1.2): every pin shows a picture
+
+A card without a picture is a worse card, so there is no such thing. Order of
+preference, decided by `src/imagery.ts` (shared by the build and the app):
+
+1. **A photo** stored in `image_url` at build time: Wikipedia's lead image
+   unless it is a map, flag, logo, diagram, shakemap or SVG render
+   (`isPhotoUrl()` rejects those by filename); otherwise the item's own
+   Wikidata image (P18, turned into a direct Commons thumbnail URL); for
+   volcanoes the Smithsonian GVP photo. Under a source's cap, imageless
+   candidates are demoted so the pool prefers pins with a photo.
+2. **A satellite view of the spot**, generated at runtime for every pin
+   without a photo, every live pin, and any photo that fails to load. Esri
+   World Imagery's export endpoint (no key; attribution *Esri, Maxar,
+   Earthstar Geographics*) or Google Static Maps when the app is built with
+   `VITE_GOOGLE_MAPS_KEY`. Zoom depends on the category: sites get a few
+   kilometres, epicentres and lakes a region, wrecks the nearest coast.
+
+The card marks satellite images with a *SATELLITE VIEW* badge and shows the
+imagery credit in the corner. The seeds carry their article's photo too.
 
 ## The tight-location rule
 

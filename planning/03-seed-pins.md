@@ -5,6 +5,9 @@ dynamic — is judged against. Machine-readable source: `../data/seed-pins.json`
 
 **29 pins** across **7 categories**.
 
+Since V1.2 each seed also carries an `image_url` (the article's lead photo),
+added by `npm run seeds:images`; re-run it after adding a seed. The facts below are the hand-written part and stay the source of truth.
+
 ## event (1)
 
 ### Up Helly Aa

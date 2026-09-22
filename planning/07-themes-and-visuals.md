@@ -62,9 +62,32 @@ across the Pacific at 16°S. Rings are now unwrapped and drawn at three
 longitude offsets.
 
 **Card.** Category pill coloured by family; badges for *LIVE*, *TODAY IN
-HISTORY*, *ERUPTING* and the year; continent + coordinates; the story link;
-and a credit line for the text source. Thumbnails come from the cache (no
-runtime Wikipedia call) and are requested at 640 px.
+HISTORY*, *ERUPTING*, *SATELLITE VIEW* and the year; continent + coordinates;
+the story link; a credit line for the text source and, in the corner of the
+picture, the imagery credit.
+
+**A picture on every card (V1.2).** Photos come from the cache at 640 px; a
+pin without one — and every live pin — gets a satellite view of the spot
+(`src/imagery.ts`; Esri World Imagery, or Google Static Maps with a key).
+A photo that fails to load falls back to the satellite view too. The next
+pin's image is fetched into a blob while the camera is still flying
+(`src/imageLoader.ts`), so the picture is on screen the moment the card opens.
+
+**History (V1.2).** Every landing is logged (`src/history.ts`, persisted in
+`localStorage` for 30 days). `H` or the *History* button opens the *Visited*
+panel: thumbnails, title, category, continent and "4 min ago", newest first,
+the current pin highlighted. Click a row to fly back; `←` / `→` (or
+Backspace) walk the log without adding to it. Revisits and globe clicks are
+the user's choice, so they ignore the auto-tour's continent rule, and the
+card lingers at least 14 s before the tour moves on.
+
+**Flights scale with distance.** A hop across the planet takes the full
+4 s and climbs high; a revisit next door is quicker and flatter, so backing
+up one pin never loops into space.
+
+**Continent balance.** The tour lifts pins on thin continents
+(`continentLift` in `src/tour.ts`, capped at 2.5×) so a pool that is a third
+Europe does not become a tour that is a third Europe.
 
 **Status bar.** Mode LED, continent hop, dwell countdown, pin count with the
 number of live pins, and the current theme name.
@@ -77,10 +100,13 @@ and long ones can be read.
 | Key | Action |
 |---|---|
 | `space` | jump now |
+| `←` / `→` (or Backspace) | back / forward through the pins you've seen |
+| `H` | open / close the *Visited* panel |
+| `Esc` | close the panel |
 | `T` / `Shift+T` | next / previous theme |
 | `P` | pause / resume the auto-tour |
 | drag | orbit while idle |
-| click a pin | fly there (if it's on another continent — the V1 continent rule still holds) |
+| click a pin | fly there (any continent — the continent rule only governs the auto-tour) |
 
 ## Performance budget
 

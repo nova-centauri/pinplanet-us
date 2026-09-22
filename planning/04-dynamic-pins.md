@@ -3,9 +3,11 @@
 How the app adds pins on its own while running. The goal: the globe never
 goes stale, and every fresh pin still passes the tight-location rule.
 
-**Status (V1.1):** the provider architecture is built (`src/providers/`),
+**Status (V1.2):** the provider architecture is built (`src/providers/`),
 four providers are live, and the pool/expiry/localStorage layer is in place.
-The trending-topics provider and its review queue are still open.
+Live pins get a satellite view of their spot on the card (they carry no
+photo); the ISS keeps its NASA photo. The trending-topics provider and its
+review queue are still open.
 
 ## Architecture: pin providers
 
@@ -53,8 +55,8 @@ its own cadence. Pins carry their own `expires`; the pool sweeps every minute.
 
 ### Provider 4 — Wikipedia "on this day" (`historical`) ✅
 
-- **Build time:** all 366 days are already in the cache, two events per day,
-  tagged `day: "MM-DD"`. Today's get a 6× tour weight and a *TODAY IN
+- **Build time:** all 366 days are already in the cache, three events per
+  day, tagged `day: "MM-DD"`. Today's get a 6× tour weight and a *TODAY IN
   HISTORY* badge — no fetch needed.
 - **Runtime:** `feed/onthisday/events/MM/DD` for the current date adds up to
   eight more events (TTL: midnight). Same tightness classifier
@@ -86,6 +88,12 @@ its own cadence. Pins carry their own `expires`; the pool sweeps every minute.
 5. **Offline:** if the cache fetch and every provider fail, the app tours on
    the 29 seeds and says nothing beyond a console line. The globe never looks
    broken.
+6. **Pictures:** a live pin has no photo, so its card shows a satellite view
+   of the epicentre / event (Esri World Imagery, or Google Static Maps with a
+   key) — see `02-pin-schema.md` → Images. Wikipedia "today" pins carry the
+   article thumbnail when it is a photo.
+7. **History:** every landing, live or cached, is logged in the *Visited*
+   panel; an expired live pin simply stops being revisitable.
 
 ## What to build next (priority order)
 
