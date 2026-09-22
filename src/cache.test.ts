@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { imageFor, isPhotoUrl } from "./imagery";
 import { toPin } from "./pins";
 import type { SeedPin } from "./types";
 
@@ -80,7 +81,22 @@ test("cache covers the promised sources and categories", () => {
   const withDay = pins.filter((p) => p.day).length;
   assert.ok(withDay >= 300, `only ${withDay} on-this-day pins`);
   const withImage = pins.filter((p) => p.image_url).length;
-  assert.ok(withImage / pins.length > 0.7, "most pins should carry a thumbnail");
+  assert.ok(withImage / pins.length > 0.9, `only ${withImage}/${pins.length} pins carry a photo (the rest get a satellite view)`);
+  assert.ok(categories.has("natural disaster"), "missing category natural disaster");
+  assert.ok(categories.has("site") && pins.filter((p) => p.category === "site").length >= 600, "built structures should be in the pool");
+});
+
+test("stored photos are photos: no maps, flags, logos or SVG renders", () => {
+  const bad = load().filter((p) => p.image_url && !isPhotoUrl(p.image_url));
+  assert.deepEqual(bad.map((p) => p.id).slice(0, 10), [], `${bad.length} pins store a non-photo image_url`);
+});
+
+test("every pin resolves to a card image", () => {
+  for (const raw of load()) {
+    const image = imageFor(toPin(raw));
+    assert.ok(image.url.startsWith("https://"), `${raw.id}: no image`);
+    assert.ok(image.kind === "photo" || image.kind === "satellite");
+  }
 });
 
 test("cached pins convert to app pins", () => {

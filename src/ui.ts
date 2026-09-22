@@ -1,8 +1,8 @@
+import { imageFor, type PinImage } from "./imagery";
+import { ImageLoader } from "./imageLoader";
 import { continentLabel } from "./pins";
 import { formatYear } from "./otd";
 import type { Pin } from "./types";
-
-const thumbCache = new Map<string, string | null>();
 
 export interface ShowOptions {
   today?: boolean;
@@ -20,6 +20,8 @@ export class Hud {
   private readonly link = el<HTMLAnchorElement>("card-link");
   private readonly image = el<HTMLImageElement>("card-image");
   private readonly media = el<HTMLElement>("card-media");
+  private readonly imgCredit = el<HTMLElement>("card-imgcredit");
+  private readonly loader = new ImageLoader();
   private readonly coordLg = el<HTMLElement>("card-coord-lg");
   private readonly continentLg = el<HTMLElement>("card-continent-lg");
   private readonly statusMode = el<HTMLElement>("status-mode");
@@ -63,7 +65,12 @@ export class Hud {
     this.card.dataset.open = "true";
     this.cardRect = null;
 
-    void this.loadImage(pin, token);
+    this.setImage(pin, imageFor(pin), token);
+  }
+
+  /** Warm the cache for the next landing while the camera is still flying. */
+  prefetch(pin: Pin): void {
+    this.loader.prefetch(imageFor(pin).url);
   }
 
   hideCard(): void {
@@ -167,47 +174,29 @@ export class Hud {
     this.badges.appendChild(b);
   }
 
-  private async loadImage(pin: Pin, token: number): Promise<void> {
-    const src = sharpen(pin.imageUrl) || (await wikiThumb(pin));
-    if (token !== this.request || !src) return;
+  /** Photo when there is one; a satellite view of the spot otherwise (or when the photo fails). */
+  private setImage(pin: Pin, image: PinImage, token: number): void {
+    this.media.dataset.kind = image.kind;
+    this.imgCredit.textContent = image.kind === "satellite" ? `Satellite · ${image.credit}` : image.credit ? `Photo · ${image.credit}` : "";
+    for (const stale of this.badges.querySelectorAll('[data-kind="sat"]')) stale.remove();
+    if (image.kind === "satellite") this.badge("sat", "SATELLITE VIEW");
+    void this.loadImage(pin, image, token);
+  }
+
+  private async loadImage(pin: Pin, image: PinImage, token: number): Promise<void> {
+    const src = await this.loader.load(image.url);
+    if (token !== this.request) return;
     this.image.onload = () => {
       if (token === this.request) this.image.dataset.ok = "true";
     };
     this.image.onerror = () => {
-      if (token === this.request) this.image.dataset.ok = "false";
+      if (token !== this.request) return;
+      this.loader.forget(image.url);
+      this.image.dataset.ok = "false";
+      if (image.kind === "photo") this.setImage(pin, imageFor(pin, { forceSatellite: true }), token);
     };
     this.image.referrerPolicy = "no-referrer";
     this.image.src = src;
-  }
-}
-
-/** Ask Wikimedia for a 640px thumb instead of the 320px the API hands out. */
-function sharpen(url: string): string {
-  if (!url) return "";
-  if (/upload\.wikimedia\.org\/.*\/thumb\//.test(url)) return url.replace(/\/(\d{2,4})px-/, "/640px-");
-  return url;
-}
-
-async function wikiThumb(pin: Pin): Promise<string | null> {
-  if (thumbCache.has(pin.id)) return thumbCache.get(pin.id) ?? null;
-  const slug = pin.storyUrl.split("/wiki/")[1];
-  if (!slug) {
-    thumbCache.set(pin.id, null);
-    return null;
-  }
-  try {
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`);
-    if (!res.ok) {
-      thumbCache.set(pin.id, null);
-      return null;
-    }
-    const data = (await res.json()) as { thumbnail?: { source?: string } };
-    const src = data.thumbnail?.source ? sharpen(data.thumbnail.source.split("?")[0]!.replace("https://thumb.wikimedia.org/", "https://upload.wikimedia.org/")) : null;
-    thumbCache.set(pin.id, src);
-    return src;
-  } catch {
-    thumbCache.set(pin.id, null);
-    return null;
   }
 }
 

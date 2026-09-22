@@ -12,12 +12,14 @@ import {
   buildAncient,
   buildBattles,
   buildCraters,
+  buildDisasters,
   buildGhostTowns,
   buildMeteorites,
   buildQuakes,
   buildScience,
   buildShipwrecks,
 } from "./sources/history";
+import { buildStructures } from "./sources/structures";
 import { buildOnThisDay } from "./sources/onThisDay";
 import { buildVolcanoes } from "./sources/volcanoes";
 
@@ -41,12 +43,14 @@ const SOURCES: [string, SourceBuilder][] = [
   ["meteorites", buildMeteorites],
   ["fossils", buildFossils],
   ["quakes", buildQuakes],
+  ["disasters", buildDisasters],
   ["shipwrecks", buildShipwrecks],
   ["science", buildScience],
   ["ancient", buildAncient],
   ["peaks", buildPeaks],
   ["features", buildFeatures],
   ["heritage", buildHeritage],
+  ["structures", buildStructures],
   ["ghost-towns", buildGhostTowns],
   ["on-this-day", buildOnThisDay],
 ];
@@ -93,6 +97,42 @@ const CLASS_CHECK: Record<string, string> = {
   Q631305: "rock formation",
   Q9259: "World Heritage Site",
   Q6256: "country",
+  Q23442: "island",
+  Q46169: "national park",
+  Q184358: "reef",
+  Q124714: "spring",
+  Q40080: "beach",
+  Q39816: "valley",
+  Q4421: "forest",
+  Q8070: "tsunami",
+  Q7692360: "volcanic eruption",
+  Q8068: "flood",
+  Q7935: "avalanche",
+  Q167903: "landslide",
+  Q169950: "wildfire",
+  Q8081: "tornado",
+  Q184356: "radio telescope",
+  Q134447: "nuclear power plant",
+  Q23413: "castle",
+  Q17715832: "castle ruin",
+  Q57821: "fortification",
+  Q1785071: "fort",
+  Q16560: "palace",
+  Q2977: "cathedral",
+  Q32815: "mosque",
+  Q44539: "temple",
+  Q842402: "Hindu temple",
+  Q44613: "monastery",
+  Q39715: "lighthouse",
+  Q12280: "bridge",
+  Q12323: "dam",
+  Q11303: "skyscraper",
+  Q12518: "tower",
+  Q179700: "statue",
+  Q44377: "tunnel",
+  Q474: "aqueduct",
+  Q820477: "mine",
+  Q40357: "prison",
 };
 
 interface Args {
@@ -148,7 +188,31 @@ function normUrl(url: string): string {
   }
 }
 
-/** Pool rules: one pin per article; same-category pins within 20 km merge. */
+/**
+ * How close two same-category pins may be before the lower-priority one is
+ * dropped as a duplicate. Wide for things that are one event or one crater
+ * under two names; tight for built things, where a city holds a dozen
+ * distinct sites within a kilometre of each other.
+ */
+const NEAR_KM: Record<string, number> = {
+  impact: 20,
+  earthquake: 20,
+  "natural disaster": 20,
+  volcano: 8,
+  fossil: 8,
+  battle: 5,
+  geography: 3,
+  shipwreck: 3,
+  site: 0.4,
+  ancient: 0.6,
+  science: 0.4,
+  historical: 0.4,
+  "random place": 1,
+  "world record": 0.4,
+};
+const NEAR_KM_DEFAULT = 2;
+
+/** Pool rules: one pin per article; same-category pins closer than NEAR_KM merge. */
 function merge(groups: Map<string, CachedPin[]>, seedUrls: Set<string>): { pins: CachedPin[]; dropped: Record<string, number> } {
   const byUrl = new Map<string, CachedPin>();
   const byId = new Set<string>();
@@ -192,7 +256,7 @@ function merge(groups: Map<string, CachedPin[]>, seedUrls: Set<string>): { pins:
     for (let dx = -1; dx <= 1 && !clash; dx++) {
       for (let dy = -1; dy <= 1 && !clash; dy++) {
         for (const other of grid.get(key(pin, dx, dy)) ?? []) {
-          if (km(pin, other) < 20) {
+          if (km(pin, other) < (NEAR_KM[pin.category] ?? NEAR_KM_DEFAULT)) {
             clash = true;
             break;
           }

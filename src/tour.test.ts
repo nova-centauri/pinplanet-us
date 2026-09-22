@@ -103,3 +103,24 @@ test("dwell time scales with fact length within bounds", () => {
   assert.ok(dwellFor(long) <= 12);
   assert.ok(dwellFor(long) > dwellFor(short));
 });
+
+test("thin continents get airtime: a 9:1 pool does not become a 9:1 tour", () => {
+  const pins: Pin[] = [];
+  for (let i = 0; i < 900; i++) pins.push(fake(`eu-${i}`, "site", "europe"));
+  for (let i = 0; i < 100; i++) pins.push(fake(`af-${i}`, "site", "africa"));
+  for (let i = 0; i < 100; i++) pins.push(fake(`as-${i}`, "site", "asia"));
+  const previous = fake("prev", "site", "asia");
+  let seed = 11;
+  const random = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+  let europe = 0;
+  const picks = 3000;
+  for (let i = 0; i < picks; i++) {
+    if (pickNextPin(pins, previous, [], { random }).continent === "europe") europe += 1;
+  }
+  // Proportional would be 90%; the lift pulls it down without inverting it.
+  assert.ok(europe / picks < 0.8, `europe took ${europe}/${picks}`);
+  assert.ok(europe / picks > 0.5, `europe only ${europe}/${picks}`);
+});

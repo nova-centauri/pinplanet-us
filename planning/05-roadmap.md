@@ -30,6 +30,24 @@
       weighting, text cleaning
 - [x] Docs: `06-data-sources.md`, `07-themes-and-visuals.md`
 
+## V1.2 — a picture on every pin, history, a bigger pool — done
+
+- [x] Every card has an image: photo from the cache (maps/flags/logos
+      rejected, Wikidata P18 fallback, seeds included) or a satellite view of
+      the spot at runtime (Esri, optional Google key); prefetched during the
+      flight so it is on screen when the card opens
+- [x] *Visited* panel (`H`), `←` / `→` back and forward, persisted 30 days;
+      manual hops ignore the auto-tour continent rule; flights scale with
+      distance
+- [x] Pool grown: built structures (castles, lighthouses, bridges, dams,
+      towers, statues, temples…), islands, national parks, reefs, beaches,
+      valleys, forests, ultra-prominent peaks, historic natural disasters,
+      radio telescopes and reactors; three on-this-day events per day; more
+      fossil dig sites; lower sitelink bars outside Europe / North America
+- [x] Continent-balanced tour weighting; category-aware proximity merge
+- [x] Tests: image classifier, satellite URL, history model, continent lift,
+      cache image contract
+
 ## Next
 
 - [ ] Trending feed + review queue (`current topic`) — needs the hackathon
@@ -40,8 +58,10 @@
 - [ ] Deploy to pinplanet.us and set the two webhook secrets
 - [ ] Monthly `npm run cache:build` (GitHub Action on a schedule → PR)
 - [ ] Sitemap / share links (`?pin=<id>` deep links)
-- [ ] Optional: same-continent hops on click (relax the V1 rule for manual
-      picks only)
+- [ ] Share links (`?pin=<id>`) that open on a pin — the history panel is
+      the natural place to copy one from
+- [ ] An LLM rewrite pass in the builder so generated facts read like the
+      seeds (punchy, one surprise each), attribution kept
 
 ## Cut list (if time gets short)
 

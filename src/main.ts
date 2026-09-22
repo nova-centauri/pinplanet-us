@@ -2,6 +2,8 @@ import "./style.css";
 import { Clock, Vector3 } from "three";
 import { FlightRig } from "./flight";
 import { GlobeScene } from "./globe";
+import { History, localVisitStore } from "./history";
+import { HistoryPanel } from "./historyPanel";
 import { todayKey } from "./otd";
 import { loadCachedPins, loadPins, PinPool } from "./pins";
 import { IssTracker, startProviders } from "./providers";
@@ -49,6 +51,7 @@ void loadCachedPins("/data/pins.json")
     const added = pool.add(pins);
     console.info(`[pinplanet] cached pool: +${added} pins`);
     syncPins();
+    if (panel.open) panel.render();
   })
   .catch((err) => console.warn("[pinplanet] cached pins unavailable; touring on seeds", err));
 
@@ -65,8 +68,17 @@ function loadExtraPins(): void {
 }
 window.setTimeout(loadExtraPins, 9000);
 
+// ── History: every landing is logged; ← → walk it, the panel lists it ───
+const history = new History(80, localVisitStore);
+const shown = new Set<string>(history.recentIds(80));
+const panel = new HistoryPanel(
+  history,
+  (id) => pool.byId.get(id),
+  (pin) => jumpTo(pin),
+  (direction) => step(direction),
+);
+
 let breaking: Pin | null = null;
-const shown = new Set<string>();
 
 startProviders(({ provider, pins, fromCache }) => {
   const added = pool.add(pins);
@@ -98,34 +110,47 @@ window.setInterval(() => {
 let current: Pin | null = null;
 let autoTour = true;
 let dwellLeft = 0;
+let manualLanding = false;
 let dragging = false;
 let dragDistance = 0;
 let lastPointer = { x: 0, y: 0 };
-const recent: string[] = [];
 const RECENT_MAX = 60;
+const MANUAL_DWELL = 14; // seconds to linger on a pin the user asked for
 
 const first = pickNextPin(pool.pins, null);
-beginJump(null, first, 4.1);
+beginJump(null, first, { duration: 4.1 });
 
-function beginJump(from: Pin | null, to: Pin, duration?: number): void {
-  if (from) assertContinentHop(from, to);
+interface JumpOptions {
+  duration?: number;
+  /** The user chose this pin: the auto-tour continent rule does not apply. */
+  manual?: boolean;
+  /** false when walking back/forward through history (no new log entry). */
+  track?: boolean;
+}
+
+function beginJump(from: Pin | null, to: Pin, opts: JumpOptions = {}): void {
+  if (from && !opts.manual) assertContinentHop(from, to);
   hud.hideCard();
   hud.setHop(from, to);
   hud.setMode(autoTour, true);
+  hud.prefetch(to);
   globe.setActive(to.id, to);
-  flight.start(from, to, duration);
+  flight.start(from, to, opts.duration);
   current = to;
-  remember(to.id);
+  manualLanding = Boolean(opts.manual);
+  shown.add(to.id);
+  if (opts.track !== false) history.push(to.id);
 }
 
 function onLanded(): void {
   if (!current) return;
   hud.showPin(current, { today: current.day === todayKey() });
   hud.setMode(autoTour, false);
-  dwellLeft = dwellFor(current);
+  dwellLeft = manualLanding ? Math.max(MANUAL_DWELL, dwellFor(current)) : dwellFor(current);
   loadExtraPins();
 }
 
+/** The auto-tour's next pin (or the breaking quake, once). */
 function jumpNow(): void {
   if (!current || flight.phase === "flying") return;
   let next: Pin | null = null;
@@ -134,26 +159,34 @@ function jumpNow(): void {
     breaking = null;
     hud.toast("Breaking: major earthquake");
   } else {
-    next = pickNextPin(pool.pins, current, recent, { today: todayKey() });
+    next = pickNextPin(pool.pins, current, history.recentIds(RECENT_MAX), { today: todayKey() });
   }
   beginJump(current, next);
 }
 
+/** A pin the user picked (globe click, history row): any continent goes. */
 function jumpTo(pin: Pin): void {
-  if (!current || flight.phase === "flying" || pin.id === current.id) return;
-  if (pin.continent === current.continent) {
-    // Same continent: the V1 continent rule forbids the hop, so re-home the
-    // camera by way of the pin's antipode neighbour is overkill — just show it.
-    hud.toast(`${pin.title} — same continent, hop skipped`);
+  if (!current || flight.phase === "flying") return;
+  if (pin.id === current.id) {
+    dwellLeft = Math.max(dwellLeft, MANUAL_DWELL);
     return;
   }
-  beginJump(current, pin);
+  beginJump(current, pin, { manual: true });
 }
 
-function remember(id: string): void {
-  shown.add(id);
-  recent.push(id);
-  if (recent.length > RECENT_MAX) recent.shift();
+/** ← / →: walk the visit log without adding to it. */
+function step(direction: -1 | 1): void {
+  if (!current || flight.phase === "flying") return;
+  let visit = direction < 0 ? history.back() : history.forward();
+  // Skip entries that can't be shown any more (expired live pins) or that are the pin we're on.
+  while (visit && (!pool.byId.has(visit.id) || visit.id === current.id)) {
+    visit = direction < 0 ? history.back() : history.forward();
+  }
+  if (!visit) {
+    hud.toast(direction < 0 ? "Nothing further back" : "Already at the latest pin");
+    return;
+  }
+  beginJump(current, pool.byId.get(visit.id)!, { manual: true, track: false });
 }
 
 function setAuto(on: boolean): void {
@@ -167,6 +200,7 @@ function setAuto(on: boolean): void {
 document.getElementById("surprise")?.addEventListener("click", () => jumpNow());
 document.getElementById("pause")?.addEventListener("click", () => setAuto(!autoTour));
 document.getElementById("theme")?.addEventListener("click", () => cycleTheme(1));
+document.getElementById("history-btn")?.addEventListener("click", () => panel.toggle());
 
 function cycleTheme(step: number): void {
   const theme = themes.next(step);
@@ -189,6 +223,22 @@ window.addEventListener("keydown", (event) => {
     case "KeyP":
       event.preventDefault();
       setAuto(!autoTour);
+      break;
+    case "KeyH":
+      event.preventDefault();
+      panel.toggle();
+      break;
+    case "ArrowLeft":
+    case "Backspace":
+      event.preventDefault();
+      step(-1);
+      break;
+    case "ArrowRight":
+      event.preventDefault();
+      step(1);
+      break;
+    case "Escape":
+      if (panel.open) panel.toggle(false);
       break;
     default:
       break;
@@ -280,7 +330,18 @@ requestAnimationFrame(frame);
 // Debug handle for the console and headless checks: window.__pinplanet
 declare global {
   interface Window {
-    __pinplanet?: { globe: GlobeScene; flight: FlightRig; pool: PinPool; themes: ThemeManager; setAuto: (on: boolean) => void; jumpNow: () => void };
+    __pinplanet?: {
+      globe: GlobeScene;
+      flight: FlightRig;
+      pool: PinPool;
+      themes: ThemeManager;
+      history: History;
+      panel: HistoryPanel;
+      setAuto: (on: boolean) => void;
+      jumpNow: () => void;
+      jumpTo: (pin: Pin) => void;
+      step: (direction: -1 | 1) => void;
+    };
   }
 }
-window.__pinplanet = { globe, flight, pool, themes, setAuto, jumpNow };
+window.__pinplanet = { globe, flight, pool, themes, history, panel, setAuto, jumpNow, jumpTo, step };
