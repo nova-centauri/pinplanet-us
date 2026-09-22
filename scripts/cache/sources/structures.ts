@@ -1,6 +1,6 @@
 import type { BuildContext, CachedPin } from "../types";
 import { classQuery, parseWdDate, qty, relax, sparql, type Row } from "../wikidata";
-import { eraYear, fmtInt, fmtNum } from "../text";
+import { eraYear, fmtInt, fmtNum, sentences } from "../text";
 import { firstSentenceMentions, num, pinsFromWikidata } from "./common";
 import type { WikiSummary } from "../wikipedia";
 
@@ -86,7 +86,10 @@ function structureHook(s: StructureClass, row: Row, summary: WikiSummary): strin
   if (s.measure === "length" && length && length > 0 && !firstSentenceMentions(summary, length >= 1000 ? fmtNum(length / 1000) : fmtInt(length)))
     bits.push(length >= 1000 ? `${fmtNum(length / 1000)} km long` : `${fmtInt(length)} m long`);
   const when = parseWdDate(row.opened ?? row.built) ?? parseWdDate(row.built);
-  if (when && when.year > -4000 && when.year <= 2026 && !firstSentenceMentions(summary, Math.abs(when.year))) {
+  // Wikidata's inception and the article's "built from 1402" often disagree by
+  // a century: lead with the date only when the intro gives none of its own.
+  const introHasYear = /(?<![\d,])(1\d{3}|20[0-2]\d)(?![\d,])/.test(sentences(summary.extract)[0] ?? "");
+  if (when && when.year > -4000 && when.year <= 2026 && !introHasYear) {
     bits.push(`${s.verb ?? "built"} ${eraYear(when.year)}`);
   }
   if (!bits.length) return null;

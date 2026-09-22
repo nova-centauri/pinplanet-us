@@ -1,3 +1,4 @@
+import { isPhotoUrl } from "../../../src/imagery";
 import { fetchJson } from "../http";
 import { CREDIT, type BuildContext, type CachedPin } from "../types";
 import { candidatesForDay, otdFact, pickCandidates, type OtdEvent } from "../../../src/otd";
@@ -52,7 +53,7 @@ export async function buildOnThisDay(ctx: BuildContext): Promise<CachedPin[]> {
           rank: round(Math.min(1, 0.45 + c.score * 0.08), 3),
           year: c.year,
           day: `${mm}-${dd}`,
-          ...(c.image ? { image_url: c.image } : {}),
+          ...(c.image && isPhotoUrl(c.image) ? { image_url: c.image } : {}),
         });
       }
       if (days % 60 === 0) process.stderr.write(`  otd: ${days} days, ${pins.length} pins so far\n`);

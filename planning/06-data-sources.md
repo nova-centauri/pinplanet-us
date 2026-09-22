@@ -1,55 +1,59 @@
 # PinPlanet — data sources
 
-How the pin pool went from 29 hand-written seeds to 3,296 cached pins plus
+How the pin pool went from 29 hand-written seeds to 5,763 cached pins plus
 live feeds, without giving up the quality bar in `03-seed-pins.md`.
 
 Two layers:
 
 1. **Cached pins** — generated at build time by `scripts/cache/`, committed to
-   `public/data/pins.json`, loaded by the browser in one request. No API calls
-   on the critical path: the globe is touring the full pool ~200 ms after paint.
+   `public/data/pins.json` (+ `pins-extra.json`), loaded by the browser in two
+   requests. No API calls on the critical path: the globe is touring a
+   1,400-pin core ~200 ms after paint and the full pool after the first
+   landing.
 2. **Live pins** — a handful of feeds polled in the browser (earthquakes, NASA
    natural events, the ISS, today's history). Cached in `localStorage` so a
    reload is instant and a dead network degrades to "slightly stale", never to
    "broken".
 
-## The cached pool at a glance
+## The cached pool at a glance (V1.2)
 
 | | |
 |---|---|
-| Total pins | **3,296** (target was ≥ 1,000): 1,400 in the core file the browser loads first, 1,896 in the extension loaded after the first landing |
-| With a thumbnail | 3,109 (94 %) |
-| File size | 939 KB core + 1,276 KB extension, raw (≈ 204 KB + 277 KB gzipped), one pin per line |
-| Continents | all seven |
-| Build time | ≈ 10 min cold, seconds warm (every HTTP response is cached in `scripts/.cache/`) |
+| Total pins | **5,763** (V1.1: 3,296; the original target was ≥ 1,000): 1,400 in the core file the browser loads first, 4,363 in the extension loaded after the first landing |
+| With a photo | 5,396 (94 %); the other 367 get a satellite view in the app, so every card has a picture |
+| File size | 944 KB core + 2,940 KB extension, raw (≈ 206 KB + 637 KB gzipped), one pin per line |
+| Moments in time | 846 pins carry a `day` tag (661 from the on-this-day feed, the rest inherited) |
+| Continents | all seven — Europe 1,902 · Asia 1,530 · North America 1,098 · Africa 461 · South America 348 · Oceania 339 · Antarctica 85 |
+| Build time | ≈ 20 min cold, seconds warm (every HTTP response is cached in `scripts/.cache/`) |
 
 Per category:
 
 | Category | Pins |
 |---|---|
-| `geography` | 610 |
-| `historical` | 483 |
-| `battle` | 271 |
-| `ancient` | 262 |
-| `fossil` | 236 |
-| `site` | 227 |
-| `volcano` | 219 |
-| `random place` | 210 |
-| `impact` | 192 |
-| `science` | 176 |
-| `earthquake` | 166 |
-| `shipwreck` | 150 |
-| `world record` | 94 |
+| `geography` | 1,209 |
+| `site` | 917 |
+| `historical` | 853 |
+| `battle` | 424 |
+| `volcano` | 363 |
+| `ancient` | 324 |
+| `impact` | 265 |
+| `random place` | 261 |
+| `fossil` | 252 |
+| `earthquake` | 251 |
+| `science` | 237 |
+| `shipwreck` | 202 |
+| `natural disaster` | 110 |
+| `world record` | 95 |
 
 Per source:
 
 | Source | Pins |
 |---|---|
-| Wikidata + Wikipedia (bulk queries) | 1458 |
-| Wikipedia (hand-picked titles) | 1168 |
-| Wikipedia "On this day" | 334 |
-| Smithsonian Global Volcanism Program | 219 |
-| Paleobiology Database | 117 |
+| Wikidata + Wikipedia (bulk queries) | 3,300 |
+| Wikipedia (hand-picked titles) | 1,309 |
+| Wikipedia "On this day" | 661 |
+| Smithsonian Global Volcanism Program | 363 |
+| Paleobiology Database | 130 |
 
 ## Sources
 
@@ -64,13 +68,13 @@ Per source:
   first sentence(s) of the GVP summary. Volcanoes in the continuing-eruption
   list get an `erupting` flag (shown as a badge) and `Erupting as of <month>`.
 - **Selection:** ranked by Wikipedia fame + recent activity + having a photo;
-  capped at 280 so volcanoes don't flood the pool.
+  capped at 420 so volcanoes don't flood the pool.
 - **License:** free with citation — *Global Volcanism Program, Smithsonian
   Institution*. Credited on every card.
 - **CORS:** none — that's why this is build-time only. Live eruption activity
   comes from NASA EONET instead.
 
-### Wikidata + Wikipedia → `battle`, `impact`, `earthquake`, `shipwreck`, `science`, `ancient`, `geography`, `site`, `random place`, `fossil`
+### Wikidata + Wikipedia → `battle`, `impact`, `earthquake`, `natural disaster`, `shipwreck`, `science`, `ancient`, `geography`, `site`, `random place`, `fossil`
 
 One SPARQL query per class (with `wikibase:sitelinks` as the fame proxy and a
 required English article), then one batched Wikipedia action-API call per 20
@@ -194,7 +198,8 @@ npm run cache:build -- --fresh         # ignore scripts/.cache and refetch every
 ```
 
 The build prints per-source counts, how many candidates the tight-location
-rule rejected, and writes `public/data/pins.meta.json` alongside the pool.
+rule and the continent bar rejected, where each source's photos came from,
+and writes `public/data/pins.meta.json` alongside the pool.
 Commit both files. Rebuild monthly-ish: the only things that go stale are the
 "erupting" flags and newly notable articles.
 

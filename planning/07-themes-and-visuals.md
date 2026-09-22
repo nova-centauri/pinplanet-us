@@ -37,7 +37,7 @@ dock is generated from the same variables.
 
 ## Visual system (V1.1 pass)
 
-**Pins as one draw call.** 2,000+ pins are a single `THREE.Points` with a
+**Pins as one draw call.** 5,000+ pins are a single `THREE.Points` with a
 custom shader: per-pin size (fame), family colour (nature / history / live),
 a slow twinkle, a stronger pulse for live pins, and back-face fade so pins
 behind the horizon dim before the body sphere occludes them. The V1 approach
@@ -113,5 +113,7 @@ and long ones can be read.
 Draw calls per frame ≈ 12 (body, meridians, land, pins, two atmosphere
 shells, two star layers, active marker parts, trail core + glow). The land
 cloud is 20,000 points; the pin cloud rebuilds in < 2 ms when the pool
-changes. Bundle: ~70 KB app + ~495 KB three.js (cached separately) + the pin files:
-939 KB core (204 KB gzipped) now, 1,276 KB extension (277 KB gzipped) after the first landing.
+changes. Bundle: ~86 KB app + ~495 KB three.js (cached separately) + the pin files:
+944 KB core (206 KB gzipped) now, 2,940 KB extension (637 KB gzipped) after the first landing.
+Card images are fetched one landing ahead; the history panel's thumbnails
+load lazily and only while it is open.

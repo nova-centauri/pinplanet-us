@@ -1,11 +1,12 @@
 # PinPlanet
 
 A single-window 3D globe that auto-tours the planet, swooping from pin to pin.
-Each landing pops a fact card. **V1.1** adds a 3,296-pin cached pool built
-from open data (volcanoes, battlefields, fossils, craters, meteorites,
-shipwrecks, ancient sites, world records, 334 moments in time…), four live
-feeds (earthquakes, NASA natural events, the ISS, today in history), ten
-colour themes and a visual pass.
+Each landing pops a fact card with a picture. **V1.2** carries a 5,763-pin
+cached pool built from open data (volcanoes, battlefields, castles and
+lighthouses, fossils, craters, meteorites, shipwrecks, ancient sites, natural
+disasters, world records, 846 moments in time…), a photo or satellite view
+on every card, a history panel, four live feeds (earthquakes, NASA natural
+events, the ISS, today in history), ten colour themes and a visual pass.
 
 Planning notes live in `planning/` — start with `planning/README.md`.
 
@@ -22,7 +23,8 @@ Open the URL Vite prints (usually [http://localhost:5173](http://localhost:5173)
 npm test             # tour rules, tightness filter, text cleaning, cache contract
 npm run build        # typecheck + production bundle
 npm run preview      # serve the built files
-npm run cache:build  # regenerate public/data/pins.json from the open-data sources (~10 min)
+npm run cache:build  # regenerate public/data/pins*.json from the open-data sources (~20 min cold)
+npm run seeds:images # refresh the seeds' photos after editing data/seed-pins.json
 ```
 
 CI (detect → install/test/build) runs on every push and PR. A green push to
@@ -39,8 +41,9 @@ fail the run.
   + additive trail, then a dwell that scales with the fact length
 - **Continent rule:** every hop lands on a different continent than the last
   pin; categories are interleaved so a volcano is rarely followed by a volcano
-- **3,296 cached pins** in two static files (a 1,400-pin core, then the rest after the first landing), so the tour is running the full
-  pool ~200 ms after first paint — no API on the critical path
+- **5,763 cached pins** in two static files (a 1,400-pin core, then the
+  rest after the first landing), so the tour is running the full pool
+  seconds after first paint — no API on the critical path
 - **Live layer:** USGS quakes (15 min), NASA EONET events (hourly), the ISS
   (moves every 12 s), today's history; cached in `localStorage`, expires on
   its own, never blocks
@@ -84,7 +87,7 @@ Full detail in `planning/06-data-sources.md`. In short:
 
 ```
 data/seed-pins.json        29 hand-curated seeds (bundled)
-public/data/pins.json      generated core pool (1,400 pins) · pins-extra.json (1,896 more) · pins.meta.json
+public/data/pins.json      generated core pool (1,400 pins) · pins-extra.json (4,363 more) · pins.meta.json
 scripts/cache/             the builder: http layer, wikidata/wikipedia helpers, one file per source
 src/                       app: globe, flight, themes, tour, providers, HUD
 planning/                  concept, schema, sources, roadmap
