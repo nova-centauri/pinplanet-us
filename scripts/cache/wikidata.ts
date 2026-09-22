@@ -88,6 +88,8 @@ export const ENWIKI = `?article schema:about ?item ; schema:isPartOf <https://en
 export const LABEL = `SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul". }`;
 /** Coordinates must be on Earth (Q2) — keeps lunar and Martian craters off the globe. */
 export const ON_EARTH = `?item p:P625/psv:P625/wikibase:geoGlobe wd:Q2 .`;
+/** The item's own image (P18) — the fallback when Wikipedia's lead image is a map. */
+export const IMAGE = `OPTIONAL { ?item wdt:P18 ?image . }`;
 
 /** Common shape: instances of a class with coordinates and an English article. */
 export function classQuery(opts: {
@@ -102,16 +104,26 @@ export function classQuery(opts: {
   const values = opts.classes.map((c) => `wd:${c}`).join(" ");
   const p31 = opts.subclasses ? "wdt:P31/wdt:P279*" : "wdt:P31";
   return `
-SELECT ?item ?itemLabel ?coord ?sl ?article ${opts.select ?? ""} WHERE {
+SELECT ?item ?itemLabel ?coord ?sl ?article ?image ${opts.select ?? ""} WHERE {
   VALUES ?cls { ${values} }
   ?item ${p31} ?cls ; wdt:P625 ?coord ; wikibase:sitelinks ?sl .
   FILTER(?sl >= ${opts.minSitelinks})
   ${ON_EARTH}
   ${opts.filter ?? ""}
   ${opts.optional ?? ""}
+  ${IMAGE}
   ${ENWIKI}
   ${LABEL}
 } ORDER BY DESC(?sl) LIMIT ${opts.limit}`;
+}
+
+/**
+ * Sources state the sitelink bar they want for Europe/North America; the
+ * query itself runs at half that so pinsFromWikidata can apply a lower bar
+ * on under-represented continents (see CONTINENT_FACTOR).
+ */
+export function relax(minSitelinks: number): number {
+  return Math.max(2, Math.round(minSitelinks * 0.5));
 }
 
 /** Normalised quantity (SI) via the psn: path. */

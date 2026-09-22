@@ -1,7 +1,8 @@
 import { fetchJson } from "../http";
 import { CREDIT, type BuildContext, type CachedPin } from "../types";
+import { isPhotoUrl } from "../../../src/imagery";
 import { classQuery, sparql } from "../wikidata";
-import { summaries } from "../wikipedia";
+import { summaries, wikidataImages } from "../wikipedia";
 import { cleanExtract, fitSentences, fmtMa, slugify } from "../text";
 import { dedupeById, pinsFromWikidata, round } from "./common";
 
@@ -207,6 +208,7 @@ export async function buildFossils(ctx: BuildContext): Promise<CachedPin[]> {
   const pins: CachedPin[] = [];
   const genera = ctx.limit ? GENERA.slice(0, Math.min(GENERA.length, Math.max(5, ctx.limit / 2))) : GENERA;
   const wiki = await summaries(genera.map((g) => g[1]));
+  const p18 = await wikidataImages(genera.map((g) => g[1]));
 
   for (let gi = 0; gi < genera.length; gi++) {
     const [taxon, wpTitle, noun] = genera[gi]!;
@@ -235,7 +237,7 @@ export async function buildFossils(ctx: BuildContext): Promise<CachedPin[]> {
       else groups.set(key, [o]);
     }
     const ranked = [...groups.values()].sort((a, b) => b.length - a.length);
-    const take = gi < 45 ? 2 : 1;
+    const take = gi < 25 ? 3 : gi < 90 ? 2 : 1;
     const used: { lat: number; lng: number }[] = [];
     let made = 0;
     for (const group of ranked) {
@@ -260,6 +262,8 @@ export async function buildFossils(ctx: BuildContext): Promise<CachedPin[]> {
       const interval = (rep.oei ?? "").replace(/^(Early|Middle|Late) /, (m) => m.toLowerCase());
       const where = placeLabel(rep);
       const finds = group.length;
+      // A skeleton photo beats the size-comparison chart most dinosaur articles lead with.
+      const image = isPhotoUrl(summary.image) ? summary.image : p18.get(summary.title) ?? p18.get(wpTitle) ?? null;
       const lead = `${noun} fossils were dug up in ${where}${interval ? ` — ${interval}` : ""}${ageText ? `, ${ageText}` : ""}${finds > 1 ? ` (${finds} recorded finds)` : ""}.`;
       const body = fitSentences(cleanExtract(summary.extract), Math.max(60, 280 - lead.length - 1));
       const fact = body ? `${lead} ${body}` : lead;
@@ -277,7 +281,7 @@ export async function buildFossils(ctx: BuildContext): Promise<CachedPin[]> {
         continent: ctx.continentOf(lat, lng),
         credit: `${CREDIT.pbdb} · ${CREDIT.wikipedia}`,
         rank: round(Math.max(0.35, 0.9 - gi * 0.004), 3),
-        ...(summary.image ? { image_url: summary.image } : {}),
+        ...(image ? { image_url: image } : {}),
       });
       made += 1;
     }
@@ -289,6 +293,7 @@ export async function buildFossils(ctx: BuildContext): Promise<CachedPin[]> {
     ...(await sparql(classQuery({ classes: ["Q2122699"], minSitelinks: 3, limit: 200 }), "lagerstätten")),
     ...(await sparql(classQuery({ classes: ["Q9096832"], minSitelinks: 5, limit: 250 }), "paleontological sites")),
   ];
-  const sites = await pinsFromWikidata({ ctx, rows, category: "fossil", idPrefix: "fossilsite", cap: 90 });
+  const sites = await pinsFromWikidata({ ctx, rows, category: "fossil", idPrefix: "fossilsite", cap: 110 });
   return dedupeById([...sites, ...pins]);
 }
+

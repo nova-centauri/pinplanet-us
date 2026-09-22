@@ -11,7 +11,7 @@ import { dedupeById, round } from "./common";
  * provider) rebalances toward older and happier moments.
  */
 
-const PER_DAY = 2;
+const PER_DAY = 3;
 const GRIM_PER_DAY = 1;
 const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 

@@ -1,3 +1,4 @@
+import { isPhotoUrl } from "../../../src/imagery";
 import { fetchJson } from "../http";
 import { CREDIT, rankFromSitelinks, type BuildContext, type CachedPin } from "../types";
 import { articleTitle, sparql } from "../wikidata";
@@ -38,7 +39,7 @@ interface GvpEruption {
 
 const WFS = "https://webservices.volcano.si.edu/geoserver/GVP-VOTW/ows?service=WFS&version=2.0.0&request=GetFeature&outputFormat=json&typeName=";
 
-export const VOLCANO_CAP = 280;
+export const VOLCANO_CAP = 420;
 
 export async function buildVolcanoes(ctx: BuildContext): Promise<CachedPin[]> {
   const [volcanoes, eruptions] = await Promise.all([
@@ -130,7 +131,7 @@ export async function buildVolcanoes(ctx: BuildContext): Promise<CachedPin[]> {
       credit: CREDIT.gvp,
       rank: round(Math.min(1, score), 3),
     };
-    const image = p.Primary_Photo_Link || (usable ? summary!.image : null);
+    const image = p.Primary_Photo_Link || (usable && isPhotoUrl(summary!.image) ? summary!.image : null);
     if (image) pin.image_url = image;
     if (last !== null) pin.year = last;
     if (flags.length) pin.flags = flags;

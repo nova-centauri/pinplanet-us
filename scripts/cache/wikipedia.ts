@@ -1,4 +1,7 @@
+import { createHash } from "node:crypto";
+import { isPhotoUrl } from "../../src/imagery";
 import { fetchJson } from "./http";
+import { articleTitle, sparql } from "./wikidata";
 import { cleanThumb } from "../../src/otd";
 
 export interface WikiSummary {
@@ -134,4 +137,55 @@ function toSummary(page: ActionPage): WikiSummary {
 
 export function wikiUrl(title: string): string {
   return `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_")).replace(/%2C/g, ",").replace(/%3A/g, ":").replace(/%28/g, "(").replace(/%29/g, ")").replace(/%27/g, "'")}`;
+}
+
+/**
+ * Wikidata P18 value (a Commons "Special:FilePath" URL) → a direct thumbnail
+ * on upload.wikimedia.org, using Commons' md5 path scheme so the browser
+ * never has to follow FilePath's two redirects. Only formats whose thumbnail
+ * name is predictable (jpg/png/webp) are converted; others return null.
+ */
+export function commonsThumb(fileUrl: string | undefined, width = 640): string | null {
+  if (!fileUrl) return null;
+  const m = /Special:FilePath\/(.+)$/.exec(fileUrl);
+  if (!m) return null;
+  let name: string;
+  try {
+    name = decodeURIComponent(m[1]!);
+  } catch {
+    return null;
+  }
+  name = name.replace(/ /g, "_").split("?")[0]!;
+  if (!/\.(jpe?g|png|webp)$/i.test(name)) return null;
+  const hash = createHash("md5").update(name, "utf8").digest("hex");
+  const enc = encodeURIComponent(name);
+  return `https://upload.wikimedia.org/wikipedia/commons/thumb/${hash[0]}/${hash.slice(0, 2)}/${enc}/${width}px-${enc}`;
+}
+
+/**
+ * Wikidata P18 photos for English article titles, keyed by canonical title.
+ * The fallback for articles whose lead image is a map or a size chart.
+ */
+export async function wikidataImages(titles: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!titles.length) return out;
+  const values = titles.map((t) => `<https://en.wikipedia.org/wiki/${encodeURIComponent(t.replace(/ /g, "_"))}>`).join(" ");
+  let rows: { article?: string; image?: string }[] = [];
+  try {
+    rows = await sparql(
+      `SELECT ?article ?image WHERE { VALUES ?article { ${values} } ?article schema:about ?item . ?item wdt:P18 ?image . }`,
+      "article images (P18)",
+    );
+  } catch (err) {
+    process.stderr.write(`  P18 lookup failed: ${(err as Error).message.slice(0, 100)}\n`);
+    return out;
+  }
+  for (const r of rows) {
+    if (!r.article || !r.image) continue;
+    const thumb = commonsThumb(r.image);
+    if (!thumb || !isPhotoUrl(thumb)) continue;
+    const title = articleTitle(r.article);
+    if (!out.has(title)) out.set(title, thumb);
+  }
+  return out;
 }

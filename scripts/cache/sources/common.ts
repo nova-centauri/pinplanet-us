@@ -1,8 +1,28 @@
+import { isPhotoUrl } from "../../../src/imagery";
 import { isTightDescription } from "../../../src/otd";
+import type { Continent } from "../../../src/types";
 import { CREDIT, rankFromSitelinks, type BuildContext, type CachedPin } from "../types";
 import { articleTitle, dedupeByItem, parsePoint, type Row } from "../wikidata";
-import { summaries, type WikiSummary } from "../wikipedia";
+import { commonsThumb, summaries, type WikiSummary } from "../wikipedia";
 import { composeFact, sentences, slugify } from "../text";
+
+/**
+ * Wikipedia is Europe- and North-America-heavy. A source's sitelink bar
+ * applies in full there and is lowered elsewhere so the pool reaches the
+ * rest of the planet (the query runs at half the bar; see wikidata.relax).
+ */
+export const CONTINENT_FACTOR: Record<Continent, number> = {
+  europe: 1,
+  "north-america": 1,
+  asia: 0.85,
+  oceania: 0.6,
+  africa: 0.5,
+  "south-america": 0.5,
+  antarctica: 0.3,
+};
+
+/** Imageless pins lose this much rank when a cap decides who stays. */
+const NO_IMAGE_PENALTY = 0.25;
 
 export interface WdToPinOptions {
   ctx: BuildContext;
@@ -23,11 +43,21 @@ export interface WdToPinOptions {
   exemptFromTightness?: boolean;
   /** Prefer the sentence matching this (e.g. how a ship sank) over filler. */
   focus?: RegExp;
+  /** Sitelink bar for Europe/North America; scaled down per continent. */
+  minSitelinks?: number;
+}
+
+/** Best available photo: Wikipedia's lead image unless it is a map, else Wikidata's P18. */
+export function pickImage(summary: WikiSummary | undefined, row?: Row): { url: string; from: "wikipedia" | "wikidata" } | null {
+  if (summary?.image && isPhotoUrl(summary.image)) return { url: summary.image, from: "wikipedia" };
+  const p18 = row?.image ? commonsThumb(row.image) : null;
+  if (p18 && isPhotoUrl(p18)) return { url: p18, from: "wikidata" };
+  return null;
 }
 
 /**
- * Wikidata rows (item, itemLabel, coord, sl, article, …) → pins, enriched
- * with Wikipedia intro text and thumbnails.
+ * Wikidata rows (item, itemLabel, coord, sl, article, image, …) → pins,
+ * enriched with Wikipedia intro text and thumbnails.
  */
 export async function pinsFromWikidata(opts: WdToPinOptions): Promise<CachedPin[]> {
   const rows = dedupeByItem(opts.rows).filter((r) => parsePoint(r.coord) && r.article);
@@ -37,6 +67,8 @@ export async function pinsFromWikidata(opts: WdToPinOptions): Promise<CachedPin[
 
   const pins: CachedPin[] = [];
   let loose = 0;
+  let thin = 0;
+  const images = { wikipedia: 0, wikidata: 0, none: 0 };
   for (let i = 0; i < limited.length; i++) {
     const row = limited[i]!;
     const summary = wiki.get(titles[i]!);
@@ -49,6 +81,11 @@ export async function pinsFromWikidata(opts: WdToPinOptions): Promise<CachedPin[
     let point = parsePoint(row.coord)!;
     if (opts.preferWikiCoords && summary.lat !== null && summary.lng !== null) {
       point = { lat: summary.lat, lng: summary.lng };
+    }
+    const continent = opts.ctx.continentOf(point.lat, point.lng);
+    if (opts.minSitelinks && Number(row.sl ?? 0) < opts.minSitelinks * CONTINENT_FACTOR[continent]) {
+      thin += 1;
+      continue;
     }
     const hook = opts.hook ? opts.hook(row, summary) : null;
     const fact = composeFact(hook, summary.extract, undefined, opts.focus);
@@ -65,11 +102,15 @@ export async function pinsFromWikidata(opts: WdToPinOptions): Promise<CachedPin[
       story_label: `Wikipedia: ${summary.title}`,
       source: "wikidata",
       added: opts.ctx.today,
-      continent: opts.ctx.continentOf(point.lat, point.lng),
+      continent,
       credit: CREDIT.wikipedia,
       rank: round(rank, 3),
     };
-    if (summary.image) pin.image_url = summary.image;
+    const image = pickImage(summary, row);
+    if (image) {
+      pin.image_url = image.url;
+      images[image.from] += 1;
+    } else images.none += 1;
     const year = opts.year ? opts.year(row) : undefined;
     if (year !== undefined && Number.isFinite(year)) pin.year = year;
     const flags = opts.flags ? opts.flags(row) : undefined;
@@ -77,8 +118,14 @@ export async function pinsFromWikidata(opts: WdToPinOptions): Promise<CachedPin[
     pins.push(pin);
   }
   if (loose) process.stderr.write(`  ${opts.idPrefix}: ${loose} rejected by the tight-location rule\n`);
-  pins.sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
+  if (thin) process.stderr.write(`  ${opts.idPrefix}: ${thin} under the continent sitelink bar\n`);
+  process.stderr.write(`  ${opts.idPrefix}: images — ${images.wikipedia} wikipedia, ${images.wikidata} wikidata P18, ${images.none} none (satellite at runtime)\n`);
+  pins.sort((a, b) => sortRank(b) - sortRank(a));
   return dedupeById(pins).slice(0, opts.cap);
+}
+
+function sortRank(pin: CachedPin): number {
+  return (pin.rank ?? 0) - (pin.image_url ? 0 : NO_IMAGE_PENALTY);
 }
 
 export interface TitleSpec {
@@ -99,6 +146,7 @@ export async function pinsFromTitles(
   const wiki = await summaries(limited.map((s) => s.title));
   const pins: CachedPin[] = [];
   const missing: string[] = [];
+  let noImage = 0;
   for (const spec of limited) {
     const summary = wiki.get(spec.title);
     if (!summary || summary.missing || summary.lat === null || summary.lng === null) {
@@ -125,13 +173,16 @@ export async function pinsFromTitles(
       credit: CREDIT.wikipedia,
       rank: spec.rank ?? 0.72,
     };
-    if (summary.image) pin.image_url = summary.image;
+    const image = pickImage(summary);
+    if (image) pin.image_url = image.url;
+    else noImage += 1;
     if (spec.year !== undefined) pin.year = spec.year;
     pins.push(pin);
   }
   if (missing.length) {
     process.stderr.write(`  ${idPrefix}: ${missing.length} titles skipped (no coords/extract): ${missing.slice(0, 12).join("; ")}${missing.length > 12 ? " …" : ""}\n`);
   }
+  if (noImage) process.stderr.write(`  ${idPrefix}: ${noImage} titles without a usable photo (satellite at runtime)\n`);
   return dedupeById(pins);
 }
 

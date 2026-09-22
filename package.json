@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "cache:build": "tsx scripts/cache/build.ts",
-    "cache:dev": "tsx scripts/cache/build.ts --limit=12"
+    "cache:dev": "tsx scripts/cache/build.ts --limit=12",
+    "seeds:images": "tsx scripts/cache/seedImages.ts"
   },
   "dependencies": {
     "three": "^0.170.0",
