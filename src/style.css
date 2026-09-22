@@ -373,6 +373,27 @@ body,
   border-color: var(--accent-2);
 }
 
+.badge[data-kind="sat"] {
+  color: var(--dim);
+  border-color: var(--border);
+}
+
+.card-imgcredit {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  text-shadow: 0 0 6px var(--bg);
+  pointer-events: none;
+}
+
+.card-media[data-kind="satellite"] img {
+  filter: saturate(0.7) contrast(1.08) brightness(0.92);
+}
+
 .card-body {
   padding: 14px 16px 14px;
 }
@@ -588,6 +609,161 @@ button.ghost:hover {
   border-color: var(--warm);
 }
 
+button.mini {
+  padding: 4px 9px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+button.mini:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+button.mini:disabled:hover {
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+/* History: where the tour has been */
+.history {
+  position: absolute;
+  top: 78px;
+  right: 26px;
+  bottom: 84px;
+  width: min(330px, calc(100vw - 52px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 18px 50px var(--shadow),
+    0 0 0 1px var(--accent-line);
+  z-index: 3;
+  opacity: 0;
+  transform: translateX(14px);
+  pointer-events: none;
+  transition:
+    opacity 240ms ease,
+    transform 240ms ease;
+}
+
+.history[data-open="true"] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.history-title .dim {
+  margin-left: 4px;
+}
+
+.history-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  scrollbar-width: thin;
+}
+
+.history-item button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid transparent;
+  border-left: 2px solid var(--pin-human);
+}
+
+.history-item[data-family="nature"] button {
+  border-left-color: var(--pin-nature);
+}
+.history-item[data-family="live"] button {
+  border-left-color: var(--pin-live);
+}
+
+.history-item button:hover {
+  border-color: var(--border);
+  background: var(--accent-line);
+}
+
+.history-item[data-current="true"] button {
+  border-color: var(--accent);
+  background: var(--accent-line);
+}
+
+.history-thumb {
+  flex: none;
+  width: 64px;
+  height: 42px;
+  object-fit: cover;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  filter: saturate(0.85);
+}
+
+.history-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.history-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-meta {
+  color: var(--dim);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-empty {
+  margin: 0;
+  padding: 18px 14px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.history[data-empty="false"] .history-empty {
+  display: none;
+}
+
 @media (max-width: 720px) {
   .chrome {
     padding: 14px;
@@ -608,6 +784,14 @@ button.ghost:hover {
   .hint,
   .legend {
     display: none;
+  }
+  .history {
+    top: auto;
+    left: 14px;
+    right: 14px;
+    bottom: 72px;
+    width: auto;
+    max-height: 58vh;
   }
   .status .dim,
   .status .sep:first-of-type,

@@ -14,6 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://upload.wikimedia.org" />
+    <link rel="preconnect" href="https://server.arcgisonline.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Press+Start+2P&display=swap"
       rel="stylesheet"
@@ -31,7 +32,7 @@
       <header class="chrome">
         <div class="brand">
           <span class="pixel-mark">PINPLANET</span>
-          <span class="brand-sub">pinplanet.us · v1.1</span>
+          <span class="brand-sub">pinplanet.us · v1.2</span>
         </div>
         <div class="status" id="status">
           <span class="led" id="led"></span>
@@ -57,6 +58,7 @@
           <div class="card-scan" aria-hidden="true"></div>
           <div class="card-corners" aria-hidden="true"></div>
           <div class="card-badges" id="card-badges"></div>
+          <span class="card-imgcredit" id="card-imgcredit"></span>
         </div>
         <div class="card-body">
           <div class="card-kicker">
@@ -74,6 +76,19 @@
 
       <div class="toast" id="toast" data-on="false"></div>
 
+      <aside class="history" id="history" data-open="false" data-empty="true" aria-label="Recently visited pins">
+        <header class="history-head">
+          <span class="history-title">Visited <span class="dim" id="history-count"></span></span>
+          <div class="history-nav">
+            <button type="button" id="back" class="ghost mini" title="Back (←)" aria-label="Back">←</button>
+            <button type="button" id="fwd" class="ghost mini" title="Forward (→)" aria-label="Forward">→</button>
+            <button type="button" id="history-close" class="ghost mini" title="Close (Esc)" aria-label="Close">✕</button>
+          </div>
+        </header>
+        <ol class="history-list" id="history-list"></ol>
+        <p class="history-empty dim" id="history-empty">Pins you've seen collect here. Click one to fly back; ← and → step through them.</p>
+      </aside>
+
       <footer class="dock">
         <div class="dock-left">
           <div class="legend" aria-label="pin colours">
@@ -82,10 +97,11 @@
             <span class="sw live"></span>live
           </div>
           <div class="hint dim">
-            drag to orbit · click a pin · <kbd>space</kbd> jump · <kbd>T</kbd> theme · <kbd>P</kbd> pause
+            drag to orbit · click a pin · <kbd>space</kbd> jump · <kbd>←</kbd> back · <kbd>H</kbd> history · <kbd>T</kbd> theme · <kbd>P</kbd> pause
           </div>
         </div>
         <div class="dock-right">
+          <button type="button" id="history-btn" class="ghost" title="Visited pins (H)">History</button>
           <button type="button" id="theme" class="ghost" title="Next theme (T)">Theme</button>
           <button type="button" id="pause" class="ghost" title="Pause / resume (P)" data-paused="false">Pause</button>
           <button type="button" id="surprise" title="Jump now (space)">Surprise me</button>

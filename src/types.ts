@@ -74,7 +74,7 @@ export const CATEGORY_FAMILY: Record<string, Family> = {
   "random fact": "human",
   "random place": "human",
   "current topic": "live",
-  "natural disaster": "live",
+  "natural disaster": "nature",
 };
 
 export function familyOf(category: string, live = false): Family {

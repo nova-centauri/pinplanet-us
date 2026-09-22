@@ -9,6 +9,8 @@ import type { Pin } from "./types";
  *  - each category gets airtime ∝ √(its size), so 700 history pins don't
  *    drown 40 shipwrecks, and 1 event pin doesn't repeat every minute
  *  - fame (rank) nudges, live pins and "today in history" pins get a boost
+ *  - continents with fewer pins get a lift, so a Europe-heavy pool doesn't
+ *    mean a Europe-heavy tour (capped, so Antarctica's 60 pins don't loop)
  *  - recently shown pins are skipped while alternatives exist
  */
 
@@ -41,18 +43,32 @@ export function pickNextPin(
   const pool = unseen.length > 0 ? unseen : otherContinent;
 
   const counts = new Map<string, number>();
-  for (const pin of pool) counts.set(pin.category, (counts.get(pin.category) ?? 0) + 1);
+  const continents = new Map<string, number>();
+  for (const pin of pool) {
+    counts.set(pin.category, (counts.get(pin.category) ?? 0) + 1);
+    continents.set(pin.continent, (continents.get(pin.continent) ?? 0) + 1);
+  }
+  const meanPerContinent = pool.length / Math.max(1, continents.size);
 
   const now = opts.now ?? Date.now();
-  const weighted = pool.map((pin) => ({ p: pin, w: weightOf(pin, previous, counts, opts.today, now) }));
+  const weighted = pool.map((pin) => ({ p: pin, w: weightOf(pin, previous, counts, continents, meanPerContinent, opts.today, now) }));
   return sample(weighted, random) ?? pool[Math.floor(random() * pool.length)]!;
 }
 
-function weightOf(pin: Pin, previous: Pin, counts: Map<string, number>, today: string | undefined, now: number): number {
+function weightOf(
+  pin: Pin,
+  previous: Pin,
+  counts: Map<string, number>,
+  continents: Map<string, number>,
+  meanPerContinent: number,
+  today: string | undefined,
+  now: number,
+): number {
   const n = counts.get(pin.category) ?? 1;
   // Category airtime ∝ sqrt(size): each pin's share is sqrt(n)/n.
   let w = Math.sqrt(n) / n;
   w *= 0.55 + 0.9 * pin.rank;
+  w *= continentLift(continents.get(pin.continent) ?? 1, meanPerContinent);
   if (pin.category === previous.category) w *= 0.12;
   if (pin.family === previous.family) w *= 0.7;
   if (today && pin.day === today) w *= 6;
@@ -61,6 +77,11 @@ function weightOf(pin: Pin, previous: Pin, counts: Map<string, number>, today: s
     w *= ageH < 6 ? 5 : ageH < 24 ? 3 : 1.8;
   }
   return w;
+}
+
+/** Pins on thin continents count for more; clamped so a tiny continent can't loop. */
+export function continentLift(count: number, mean: number): number {
+  return Math.min(2.5, Math.max(0.35, (mean / Math.max(1, count)) ** 0.7));
 }
 
 function sample<T>(items: { p: T; w: number }[], random: () => number): T | null {

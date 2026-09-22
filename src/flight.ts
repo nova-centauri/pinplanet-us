@@ -87,6 +87,7 @@ export class FlightRig {
   private lookTo = new THREE.Vector3();
   private bankSign = 1;
   private idleTime = 0;
+  private liftScale = 1;
 
   constructor(camera: THREE.PerspectiveCamera, earth: THREE.Group) {
     this.camera = camera;
@@ -134,11 +135,18 @@ export class FlightRig {
     return target.copy(this.camera.position).normalize();
   }
 
-  start(from: Pin | null, to: Pin, duration = flightDuration): void {
+  /**
+   * Fly to a pin. Without an explicit duration the flight scales with the
+   * distance: a hop across a continent is quicker and flatter than one
+   * across the planet, so revisiting a neighbour doesn't loop into space.
+   */
+  start(from: Pin | null, to: Pin, duration?: number): void {
     const pinDir = latLngToVector3(to.lat, to.lng, 1);
     const fromDir = this.camera.position.clone().normalize();
     const trailFrom = from ? latLngToVector3(from.lat, from.lng, 1) : fromDir;
     const crossing = new THREE.Vector3().crossVectors(fromDir, pinDir);
+    const reach = Math.min(1, fromDir.angleTo(pinDir) / 2.2); // 0 = same spot, 1 = far side
+    this.liftScale = 0.3 + 0.7 * reach;
 
     this.fromDir.copy(fromDir);
     this.toDir.copy(offsetView(pinDir, 0.3));
@@ -148,13 +156,13 @@ export class FlightRig {
     this.lookTo.set(0, 0, 0);
     this.bankSign = Math.sign(crossing.y) || 1;
     this.elapsed = 0;
-    this.duration = duration;
+    this.duration = duration ?? flightDuration * (0.6 + 0.4 * reach);
     this.phase = "flying";
     this.progress = 0;
     this.idleTime = 0;
 
     this.retireTrail();
-    this.trailCurve = new RaisedArcCurve(trailFrom, pinDir, globeRadius * 1.02, 0.58);
+    this.trailCurve = new RaisedArcCurve(trailFrom, pinDir, globeRadius * 1.02, 0.58 * this.liftScale);
     const { core, glow } = this.makeTrail(this.trailCurve);
     this.trailCore = core;
     this.trailGlow = glow;
@@ -180,7 +188,7 @@ export class FlightRig {
     const qT = new THREE.Quaternion().slerp(q, t);
     dir.copy(this.fromDir).applyQuaternion(qT).normalize();
 
-    const lift = Math.pow(Math.sin(Math.PI * t), 0.68) * flightLift;
+    const lift = Math.pow(Math.sin(Math.PI * t), 0.68) * flightLift * this.liftScale;
     const radius = THREE.MathUtils.lerp(this.fromRadius, this.toRadius, t) + lift;
 
     const ahead = this.trailCurve
