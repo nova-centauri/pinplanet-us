@@ -66,6 +66,18 @@
 - [x] Tests: thumbnail widths, candidate order, Wikipedia ref parsing,
       resolver chain (cache → Wikipedia → satellite), lookup filtering
 
+## Link previews (share card)
+
+- [x] Open Graph + Twitter/X card tags in `index.html` (title, description,
+      canonical URL, `summary_large_image`) so a pasted pinplanet.us link
+      unfurls on Discord, X, Slack, iMessage, LinkedIn, Facebook
+- [x] `public/og-image.jpg` — a 2400×1260 (1.91:1) screenshot of the live app
+      mid-tour, Giant's Causeway card open. Regenerate with
+      `scripts/og-image.mjs` (steps in the file header) whenever the look changes
+- [ ] After deploy, confirm the preview with Discord (paste the link) and
+      X's post composer; both cache previews, so an old empty card may stick
+      for a while — append `?v=2` to the shared URL to force a fresh fetch
+
 ## Next
 
 - [ ] Regenerate the cache (`npm run cache:build`) so stored URLs are 960 px

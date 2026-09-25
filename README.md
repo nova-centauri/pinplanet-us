@@ -25,6 +25,7 @@ npm run build        # typecheck + production bundle
 npm run preview      # serve the built files
 npm run cache:build  # regenerate public/data/pins*.json from the open-data sources (~20 min cold)
 npm run seeds:images # refresh the seeds' photos after editing data/seed-pins.json
+node scripts/og-image.mjs  # re-shoot the link-preview image (see the file header)
 ```
 
 CI (detect → install/test/build) runs on every push and PR. A green push to
@@ -90,6 +91,7 @@ Full detail in `planning/06-data-sources.md`. In short:
 
 ```
 data/seed-pins.json        29 hand-curated seeds (bundled)
+public/og-image.jpg        link-preview image (Open Graph / X card tags in index.html)
 public/data/pins.json      generated core pool (1,400 pins) · pins-extra.json (4,363 more) · pins.meta.json
 scripts/cache/             the builder: http layer, wikidata/wikipedia helpers, one file per source
 src/                       app: globe, flight, themes, tour, providers, HUD
