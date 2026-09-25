@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { imageFor, isPhotoUrl } from "./imagery";
+import { CARD_WIDTH, imageFor, isPhotoUrl, photoCandidates, THUMB_STEPS } from "./imagery";
 import { toPin } from "./pins";
 import type { SeedPin } from "./types";
 
@@ -96,6 +96,11 @@ test("every pin resolves to a card image", () => {
     const image = imageFor(toPin(raw));
     assert.ok(image.url.startsWith("https://"), `${raw.id}: no image`);
     assert.ok(image.kind === "photo" || image.kind === "satellite");
+    // Wikimedia refuses hotlinked thumbnails at non-standard widths (HTTP 400).
+    for (const url of image.kind === "photo" ? photoCandidates(raw.image_url!, CARD_WIDTH) : []) {
+      const width = /upload\.wikimedia\.org\/.*\/thumb\/.*\/(?:lossy-|lossless-)?(?:page\d+-)?(\d+)px-/.exec(url)?.[1];
+      if (width) assert.ok((THUMB_STEPS as readonly number[]).includes(Number(width)), `${raw.id}: requests ${width}px`);
+    }
   }
 });
 

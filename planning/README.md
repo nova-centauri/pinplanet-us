@@ -13,7 +13,7 @@ opens the full story in a new tab. Part screensaver, part rabbit hole.
 | `02-pin-schema.md` | The pin data contract, category definitions, the image rule |
 | `03-seed-pins.md` | Hand-curated starter pins (the quality bar) |
 | `04-dynamic-pins.md` | How the app adds pins on its own while running |
-| `05-roadmap.md` | What's done (V1, V1.1, V1.2) and what's next |
+| `05-roadmap.md` | What's done (V1 → V1.3) and what's next |
 | `06-data-sources.md` | Every data source, how facts are composed, licenses, how to rebuild the cache |
 | `07-themes-and-visuals.md` | The ten themes, the visual system, images on every card, the history panel, keys |
 

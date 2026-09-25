@@ -69,7 +69,7 @@ function toPin(s: IssState): Pin {
     source: "wheretheiss",
     added: new Date(s.timestamp * 1000).toISOString().slice(0, 10),
     continent: guessContinent(lat, lng),
-    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/International_Space_Station_after_undocking_of_STS-132.jpg/640px-International_Space_Station_after_undocking_of_STS-132.jpg",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/International_Space_Station_after_undocking_of_STS-132.jpg/960px-International_Space_Station_after_undocking_of_STS-132.jpg",
     credit: "Where the ISS at? · NASA",
     rank: 0.9,
     live: true,

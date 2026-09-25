@@ -66,12 +66,29 @@ HISTORY*, *ERUPTING*, *SATELLITE VIEW* and the year; continent + coordinates;
 the story link; a credit line for the text source and, in the corner of the
 picture, the imagery credit.
 
-**A picture on every card (V1.2).** Photos come from the cache at 640 px; a
-pin without one — and every live pin — gets a satellite view of the spot
-(`src/imagery.ts`; Esri World Imagery, or Google Static Maps with a key).
-A photo that fails to load falls back to the satellite view too. The next
-pin's image is fetched into a blob while the camera is still flying
-(`src/imageLoader.ts`), so the picture is on screen the moment the card opens.
+**A picture on every card (V1.2, reworked V1.3).** Wikipedia is the default
+picture; the satellite view is the backup. `src/pinImage.ts` walks the chain
+and accepts the first image that actually loads and decodes: (1) the
+Wikipedia photo cached at build time, requested at 960 px; (2) a live
+Wikipedia lookup on the pin's article — the lead image, then the other photos
+on the page (maps, flags, logos, icons skipped); (3) a satellite view of the
+spot (`src/imagery.ts`; Esri World Imagery, or Google Static Maps with a key).
+
+**The next pin is loaded before we fly (V1.3).** When a flight starts the tour
+already picks the stop after it (`planNext()` in `src/main.ts`) and resolves
+its picture — Wikipedia lookup, bytes and decode — during the flight and the
+whole dwell (10 s+). When the camera lands on it the card paints from memory
+with no blank frame. If the planned stop is no longer legal (the user jumped
+somewhere else, or it was visited meanwhile) a fresh pick is made, and a
+breaking quake is prefetched the moment it is queued.
+
+*Why V1.3 was needed:* since early 2026 upload.wikimedia.org refuses
+hotlinked thumbnails at non-standard widths (HTTP 400, "Use thumbnail sizes
+listed on https://w.wiki/GHai"). The app asked for 640 px (cards) and 160 px
+(history), so almost every photo failed and fell through to the satellite
+view. Every Wikimedia width is now snapped to a standard step
+(`THUMB_STEPS` / `thumbStep()` in `src/imagery.ts`: 20, 40, 60, 120, 250, 330,
+500, 960, 1280, 1920, 3840), and a test holds every cached pin to it.
 
 **History (V1.2).** Every landing is logged (`src/history.ts`, persisted in
 `localStorage` for 30 days). `H` or the *History* button opens the *Visited*
@@ -115,5 +132,7 @@ shells, two star layers, active marker parts, trail core + glow). The land
 cloud is 20,000 points; the pin cloud rebuilds in < 2 ms when the pool
 changes. Bundle: ~86 KB app + ~495 KB three.js (cached separately) + the pin files:
 944 KB core (206 KB gzipped) now, 2,940 KB extension (637 KB gzipped) after the first landing.
-Card images are fetched one landing ahead; the history panel's thumbnails
+Card images are resolved one stop ahead (chosen as the flight to the current
+stop begins), at most 3 Wikipedia API calls per pin and only when the cached
+photo is missing or broken; the history panel's thumbnails
 load lazily and only while it is open.

@@ -1,11 +1,18 @@
 import type { Pin } from "./types";
 
 /**
- * Every pin shows a picture. Order of preference:
- *   1. a real photo — Wikipedia's lead image, Wikidata's P18 image, or the
- *      Smithsonian GVP photo (chosen at build time, stored as image_url)
- *   2. a satellite view of the spot — Esri World Imagery by default, Google
- *      Static Maps when VITE_GOOGLE_MAPS_KEY is configured at build time
+ * Every pin shows a picture. Order of preference (see pinImage.ts, which
+ * walks this chain at runtime and prefetches it before the camera arrives):
+ *   1. the Wikipedia photo cached at build time — the article's lead image,
+ *      Wikidata's P18 image, or the Smithsonian GVP photo (image_url)
+ *   2. a live Wikipedia lookup — the article's lead image, then the other
+ *      photos on the article — when there is no cached photo or it fails
+ *   3. a satellite view of the spot, the backup — Esri World Imagery by
+ *      default, Google Static Maps when VITE_GOOGLE_MAPS_KEY is configured
+ *
+ * Wikimedia only serves hotlinked thumbnails at its standard widths (see
+ * THUMB_STEPS); any other width is refused with HTTP 400, so every size we
+ * ask for is snapped to a step.
  *
  * Maps, flags, logos, diagrams and shakemaps count as "no photo": a 640 px
  * render of a locator map is worse than a satellite view of the place, so
@@ -13,6 +20,16 @@ import type { Pin } from "./types";
  */
 
 export type ImageKind = "photo" | "satellite";
+
+/**
+ * The only thumbnail widths upload.wikimedia.org serves to direct requests
+ * (https://www.mediawiki.org/wiki/Common_thumbnail_sizes). Anything else is a
+ * 400 "Use thumbnail sizes listed on https://w.wiki/GHai".
+ */
+export const THUMB_STEPS = [20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840] as const;
+
+/** Card photos: 960 px covers a 2× card and is what the cache stores. */
+export const CARD_WIDTH = 960;
 
 export interface PinImage {
   url: string;
@@ -160,15 +177,73 @@ export function satelliteZoom(pin: Pick<Pin, "category" | "title" | "live">): nu
   }
 }
 
-/** Resize a stored image URL (Wikimedia thumbs, Commons FilePath) to `width` px. */
+/** The smallest standard Wikimedia width that is at least `width` (capped at the largest). */
+export function thumbStep(width: number): number {
+  for (const step of THUMB_STEPS) if (step >= width) return step;
+  return THUMB_STEPS[THUMB_STEPS.length - 1];
+}
+
+const THUMB_WIDTH = /\/((?:lossy-|lossless-)?(?:page\d+-)?)(\d{2,4})px-/;
+
+/**
+ * Resize a stored image URL (Wikimedia thumbs, Commons FilePath) to at least
+ * `width` px, snapped to a width Wikimedia will actually serve.
+ */
 export function sizedImage(url: string, width: number): string {
+  const step = thumbStep(width);
   if (/upload\.wikimedia\.org\/.*\/thumb\//.test(url)) {
-    return url.replace(/\/((?:lossy-|lossless-)?(?:page\d+-)?)\d{2,4}px-/, `/$1${width}px-`);
+    return url.replace(THUMB_WIDTH, `/$1${step}px-`);
   }
-  return url.replace(/([?&])width=\d+/, `$1width=${width}`);
+  return url.replace(/([?&])width=\d+/, `$1width=${step}`);
+}
+
+/**
+ * The URLs worth trying for a stored photo, best first: the card-sized
+ * thumbnail, then the stored URL itself when Wikimedia will serve it as-is
+ * (an original, or a thumbnail already at a standard width — useful when the
+ * original is narrower than the card size), then the next step down for a
+ * stored non-standard width (older caches hold 640 px URLs).
+ */
+export function photoCandidates(url: string, width: number): string[] {
+  const out = [sizedImage(url, width)];
+  const stored = THUMB_WIDTH.exec(url);
+  if (!/upload\.wikimedia\.org\/.*\/thumb\//.test(url) || !stored) {
+    out.push(url);
+  } else {
+    const w = Number(stored[2]);
+    if ((THUMB_STEPS as readonly number[]).includes(w)) out.push(url);
+    else {
+      const below = [...THUMB_STEPS].reverse().find((s) => s < w);
+      if (below) out.push(url.replace(THUMB_WIDTH, `/$1${below}px-`));
+    }
+  }
+  return [...new Set(out)];
+}
+
+/** A Wikipedia article reference parsed from a story URL. */
+export interface WikiRef {
+  lang: string;
+  title: string;
+}
+
+/** `https://en.wikipedia.org/wiki/Battle_of_Kursk` → { lang: "en", title: "Battle of Kursk" }. */
+export function wikipediaRef(url: string | null | undefined): WikiRef | null {
+  if (!url) return null;
+  const m = /^https?:\/\/([a-z0-9-]+)\.(?:m\.)?wikipedia\.org\/wiki\/([^?#]+)/i.exec(url);
+  if (!m) return null;
+  let title = m[2]!;
+  try {
+    title = decodeURIComponent(title);
+  } catch {
+    // keep the raw title
+  }
+  title = title.replace(/_/g, " ").trim();
+  if (!title || /^(special|file|category|portal|help|wikipedia|template|talk):/i.test(title)) return null;
+  return { lang: m[1]!.toLowerCase(), title };
 }
 
 export function photoCredit(url: string): string {
+  if (/upload\.wikimedia\.org\/wikipedia\/(?!commons\/)[a-z-]+\//.test(url)) return "Wikipedia";
   if (/wikimedia\.org|wikipedia\.org/.test(url)) return "Wikimedia Commons";
   if (/volcano\.si\.edu/.test(url)) return "Smithsonian GVP";
   if (/nasa\.gov/.test(url)) return "NASA";
@@ -182,13 +257,23 @@ export interface ImageOptions {
   forceSatellite?: boolean;
 }
 
-/** The picture to show for a pin: never null. */
+/**
+ * The first-choice picture for a pin, synchronously: the cached photo when
+ * there is one, a satellite view otherwise. Never null. The card goes
+ * further (live Wikipedia lookup) through PinImageResolver.
+ */
 export function imageFor(pin: Pin, opts: ImageOptions = {}): PinImage {
-  const width = opts.width ?? 640;
-  const height = opts.height ?? 360;
+  const width = opts.width ?? CARD_WIDTH;
   if (!opts.forceSatellite && pin.imageUrl && isPhotoUrl(pin.imageUrl)) {
     return { url: sizedImage(pin.imageUrl, width), kind: "photo", credit: photoCredit(pin.imageUrl) };
   }
+  return satelliteImage(pin, opts);
+}
+
+/** The backup: a satellite view of the spot, sized like a card image by default. */
+export function satelliteImage(pin: Pick<Pin, "lat" | "lng" | "category" | "title" | "live">, opts: ImageOptions = {}): PinImage {
+  const width = opts.width ?? 640;
+  const height = opts.height ?? 360;
   return {
     url: satelliteUrl(pin.lat, pin.lng, satelliteZoom(pin), width, height),
     kind: "satellite",

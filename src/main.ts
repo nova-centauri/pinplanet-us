@@ -51,6 +51,8 @@ void loadCachedPins("/data/pins.json")
     const added = pool.add(pins);
     console.info(`[pinplanet] cached pool: +${added} pins`);
     syncPins();
+    // The next stop was chosen from the 29 seeds; choose again from the full pool.
+    if (flight.phase === "flying" || dwellLeft > 3) planNext();
     if (panel.open) panel.render();
   })
   .catch((err) => console.warn("[pinplanet] cached pins unavailable; touring on seeds", err));
@@ -76,6 +78,7 @@ const panel = new HistoryPanel(
   (id) => pool.byId.get(id),
   (pin) => jumpTo(pin),
   (direction) => step(direction),
+  (pin) => hud.thumbFor(pin),
 );
 
 let breaking: Pin | null = null;
@@ -87,7 +90,10 @@ startProviders(({ provider, pins, fromCache }) => {
   if (!fromCache && provider.id === "usgs") {
     // A big, fresh quake may cut in line once (planning/04 rule 4).
     const candidate = pins.find((p) => p.rank >= 0.68 && p.when && Date.now() - p.when < 6 * 3_600_000 && !shown.has(p.id));
-    if (candidate) breaking = candidate;
+    if (candidate) {
+      breaking = candidate;
+      hud.prefetch(candidate); // it jumps the queue, so its picture should be ready too
+    }
   }
   if (added && !fromCache) console.info(`[pinplanet] ${provider.label}: +${added}`);
 });
@@ -108,6 +114,8 @@ window.setInterval(() => {
 
 // ── Tour state ──────────────────────────────────────────────────────────
 let current: Pin | null = null;
+/** The auto-tour's next stop, chosen early so its picture is loaded before we fly. */
+let upcoming: Pin | null = null;
 let autoTour = true;
 let dwellLeft = 0;
 let manualLanding = false;
@@ -140,6 +148,27 @@ function beginJump(from: Pin | null, to: Pin, opts: JumpOptions = {}): void {
   manualLanding = Boolean(opts.manual);
   shown.add(to.id);
   if (opts.track !== false) history.push(to.id);
+  planNext();
+}
+
+/**
+ * Choose the stop after `current` now, while the camera is still flying, and
+ * start loading its picture: the flight plus the whole dwell (≥ 10 s) is
+ * time to fetch, so the next landing paints instantly.
+ */
+function planNext(): void {
+  if (!current) return;
+  upcoming = pickNextPin(pool.pins, current, history.recentIds(RECENT_MAX), { today: todayKey() });
+  hud.prefetch(upcoming);
+}
+
+/** The planned stop, if it is still a legal hop from where we are now. */
+function takeUpcoming(from: Pin): Pin | null {
+  const next = upcoming;
+  upcoming = null;
+  if (!next || !pool.byId.has(next.id) || next.id === from.id || next.continent === from.continent) return null;
+  if (history.recentIds(RECENT_MAX).includes(next.id)) return null;
+  return next;
 }
 
 function onLanded(): void {
@@ -159,7 +188,7 @@ function jumpNow(): void {
     breaking = null;
     hud.toast("Breaking: major earthquake");
   } else {
-    next = pickNextPin(pool.pins, current, history.recentIds(RECENT_MAX), { today: todayKey() });
+    next = takeUpcoming(current) ?? pickNextPin(pool.pins, current, history.recentIds(RECENT_MAX), { today: todayKey() });
   }
   beginJump(current, next);
 }

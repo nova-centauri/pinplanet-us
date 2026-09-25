@@ -1,5 +1,5 @@
 import { agoLabel, type History, type Visit } from "./history";
-import { imageFor } from "./imagery";
+import { imageFor, satelliteImage } from "./imagery";
 import { continentLabel } from "./pins";
 import type { Pin } from "./types";
 
@@ -25,6 +25,8 @@ export class HistoryPanel {
     private readonly resolve: (id: string) => Pin | undefined,
     onPick: (pin: Pin) => void,
     onStep: (direction: -1 | 1) => void,
+    /** Thumbnail URL for a row (the card's resolved picture when known) and its satellite fallback. */
+    private readonly thumbFor: (pin: Pin) => { url: string; fallback: string } = defaultThumb,
   ) {
     history.onChange(() => {
       if (this.open) this.render();
@@ -96,10 +98,10 @@ export class HistoryPanel {
     thumb.loading = "lazy";
     thumb.decoding = "async";
     thumb.referrerPolicy = "no-referrer";
-    thumb.src = imageFor(pin, { width: 160, height: 100 }).url;
+    const { url, fallback } = this.thumbFor(pin);
+    thumb.src = url;
     thumb.onerror = () => {
       // A photo that will not load → the satellite view, once.
-      const fallback = imageFor(pin, { width: 160, height: 100, forceSatellite: true }).url;
       if (thumb.src !== fallback) thumb.src = fallback;
       thumb.onerror = null;
     };
@@ -122,6 +124,11 @@ export class HistoryPanel {
     this.backBtn.disabled = !this.history.canBack;
     this.fwdBtn.disabled = !this.history.canForward;
   }
+}
+
+function defaultThumb(pin: Pin): { url: string; fallback: string } {
+  const size = { width: 160, height: 100 };
+  return { url: imageFor(pin, size).url, fallback: satelliteImage(pin, size).url };
 }
 
 function el<T extends HTMLElement>(id: string): T {

@@ -48,7 +48,31 @@
 - [x] Tests: image classifier, satellite URL, history model, continent lift,
       cache image contract
 
+## V1.3 — Wikipedia pictures first, the next pin preloaded — done
+
+- [x] **Fixed: almost every card showed a satellite view.** Since early 2026
+      upload.wikimedia.org answers hotlinked thumbnails at non-standard
+      widths with HTTP 400; the app asked for 640 px (cards) and 160 px
+      (history), so 94 % of pins had a photo in the cache but almost none
+      loaded. Every width is now snapped to Wikimedia's standard steps; the
+      builder stores 960 px; a cache test holds every pin to it
+- [x] Wikipedia is the default picture, satellite the backup: cached photo →
+      live Wikipedia lookup (lead image, then the article's other photos) →
+      satellite (`src/pinImage.ts`); each step must load and decode to count
+- [x] The next stop is picked as the current flight starts and its picture
+      resolved during the flight + dwell, so the landing paints instantly
+      (measured 0–7 ms in headless Chromium, vs. a network round trip before)
+- [x] Visited-panel thumbnails reuse the card's resolved picture
+- [x] Tests: thumbnail widths, candidate order, Wikipedia ref parsing,
+      resolver chain (cache → Wikipedia → satellite), lookup filtering
+
 ## Next
+
+- [ ] Regenerate the cache (`npm run cache:build`) so stored URLs are 960 px
+      at the source (the app already repairs the 193 stored 640 px URLs)
+- [ ] Optional: a Wikipedia *geosearch* step (photo of the nearest article
+      within 10 km) for pins with no article photo — judged too loose for
+      craters and quakes, where the satellite view is the truer picture
 
 - [ ] Trending feed + review queue (`current topic`) — needs the hackathon
       skill's response shape
