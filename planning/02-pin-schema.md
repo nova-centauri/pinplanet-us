@@ -17,7 +17,7 @@ render identically.
   "added": "2026-09-21",              // ISO date the pin entered the pool
   // ── added in V1.1 (all optional) ──
   "continent": "asia",                // precomputed at build time (Natural Earth polygons)
-  "image_url": "https://upload.wikimedia.org/…/640px-….jpg",  // card photo; absent → satellite view (see Images)
+  "image_url": "https://upload.wikimedia.org/…/960px-….jpg",  // card photo; absent → live Wikipedia lookup, then satellite (see Images)
   "year": 1971,                       // the moment in time; negative = BCE
   "day": "09-21",                     // MM-DD for on-this-day pins → "TODAY IN HISTORY"
   "credit": "Wikipedia · CC BY-SA 4.0", // text attribution shown on the card
@@ -71,8 +71,10 @@ the dock is generated from the theme.
 
 ## Images (V1.2): every pin shows a picture
 
-A card without a picture is a worse card, so there is no such thing. Order of
-preference, decided by `src/imagery.ts` (shared by the build and the app):
+A card without a picture is a worse card, so there is no such thing. Wikipedia
+is the default source; the satellite view is the backup. Order of preference,
+decided by `src/imagery.ts` (shared by the build and the app) and walked at
+runtime by `src/pinImage.ts`, which only accepts an image that loads:
 
 1. **A photo** stored in `image_url` at build time: Wikipedia's lead image
    unless it is a map, flag, logo, diagram, shakemap or SVG render
@@ -80,8 +82,13 @@ preference, decided by `src/imagery.ts` (shared by the build and the app):
    Wikidata image (P18, turned into a direct Commons thumbnail URL); for
    volcanoes the Smithsonian GVP photo. Under a source's cap, imageless
    candidates are demoted so the pool prefers pins with a photo.
-2. **A satellite view of the spot**, generated at runtime for every pin
-   without a photo, every live pin, and any photo that fails to load. Esri
+2. **A live Wikipedia lookup** (V1.3) when there is no cached photo or it will
+   not load: the article's lead image (`prop=pageimages`), and when that is a
+   map or missing, the other photos on the article (`generator=images`,
+   jpeg/png/webp/tiff, ≥ 400 px, sane aspect, `isPhotoUrl()`). Anonymous CORS
+   via `origin=*`; memoised per article.
+3. **A satellite view of the spot**, the backup: only when Wikipedia has
+   nothing that loads, or the pin has no article (USGS, EONET, ISS). Esri
    World Imagery's export endpoint (no key; attribution *Esri, Maxar,
    Earthstar Geographics*) or Google Static Maps when the app is built with
    `VITE_GOOGLE_MAPS_KEY`. Zoom depends on the category: sites get a few
@@ -89,6 +96,12 @@ preference, decided by `src/imagery.ts` (shared by the build and the app):
 
 The card marks satellite images with a *SATELLITE VIEW* badge and shows the
 imagery credit in the corner. The seeds carry their article's photo too.
+
+**Widths.** upload.wikimedia.org only serves hotlinked thumbnails at its
+standard widths — 20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840 —
+and answers anything else with HTTP 400. The builder stores 960 px; the app
+snaps every size it asks for (`thumbStep()`), and repairs older 640 px URLs to
+960 (then 500) rather than request them.
 
 ## The tight-location rule
 

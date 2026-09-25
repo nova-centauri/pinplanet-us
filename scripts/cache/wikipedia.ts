@@ -66,7 +66,7 @@ export async function summaries(titles: string[]): Promise<Map<string, WikiSumma
       exsentences: "6",
       exlimit: String(BATCH),
       piprop: "thumbnail",
-      pithumbsize: "640",
+      pithumbsize: "960", // a standard Wikimedia width (see THUMB_STEPS)
       wbptterms: "description",
       coprop: "globe",
       coprimary: "all",
@@ -145,7 +145,7 @@ export function wikiUrl(title: string): string {
  * never has to follow FilePath's two redirects. Only formats whose thumbnail
  * name is predictable (jpg/png/webp) are converted; others return null.
  */
-export function commonsThumb(fileUrl: string | undefined, width = 640): string | null {
+export function commonsThumb(fileUrl: string | undefined, width = 960): string | null {
   if (!fileUrl) return null;
   const m = /Special:FilePath\/(.+)$/.exec(fileUrl);
   if (!m) return null;

@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { imageFor, inverseMercator, isPhotoUrl, satelliteUrl, satelliteZoom, sizedImage } from "./imagery";
+import {
+  imageFor,
+  inverseMercator,
+  isPhotoUrl,
+  photoCandidates,
+  photoCredit,
+  satelliteUrl,
+  satelliteZoom,
+  sizedImage,
+  THUMB_STEPS,
+  thumbStep,
+  wikipediaRef,
+} from "./imagery";
 import type { Pin } from "./types";
 
 function pin(extra: Partial<Pin> = {}): Pin {
@@ -65,7 +77,7 @@ test("satellite URL is centred on the point and sized like a card image", () => 
 test("every pin resolves to an image: photo when it has one, satellite otherwise", () => {
   const withPhoto = imageFor(pin({ imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Castle.jpg/320px-Castle.jpg" }));
   assert.equal(withPhoto.kind, "photo");
-  assert.ok(withPhoto.url.includes("/640px-"), "photos are requested at card width");
+  assert.ok(withPhoto.url.includes("/960px-"), "photos are requested at a standard width ≥ the card");
   assert.equal(withPhoto.credit, "Wikimedia Commons");
 
   const withMap = imageFor(pin({ imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Site_map.svg/320px-Site_map.svg.png" }));
@@ -89,15 +101,53 @@ test("satellite zoom: sites close, epicentres and lakes wide", () => {
   assert.ok(satelliteZoom(pin({ category: "earthquake", live: true })) <= 11);
 });
 
-test("sizedImage rewrites Wikimedia thumbnail widths and FilePath widths", () => {
+test("thumbStep snaps to the widths Wikimedia serves", () => {
+  assert.equal(thumbStep(640), 960);
+  assert.equal(thumbStep(160), 250);
+  assert.equal(thumbStep(330), 330);
+  assert.equal(thumbStep(1), 20);
+  assert.equal(thumbStep(99_999), 3840);
+});
+
+test("sizedImage only ever asks Wikimedia for a standard width", () => {
   assert.equal(
     sizedImage("https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/A.jpg/320px-A.jpg", 160),
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/A.jpg/160px-A.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/A.jpg/250px-A.jpg",
   );
   assert.equal(
     sizedImage("https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/B.tif/lossy-page1-960px-B.tif.jpg", 640),
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/B.tif/lossy-page1-640px-B.tif.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/B.tif/lossy-page1-960px-B.tif.jpg",
   );
-  assert.equal(sizedImage("https://commons.wikimedia.org/wiki/Special:FilePath/C.jpg?width=640", 160), "https://commons.wikimedia.org/wiki/Special:FilePath/C.jpg?width=160");
+  assert.equal(sizedImage("https://commons.wikimedia.org/wiki/Special:FilePath/C.jpg?width=640", 160), "https://commons.wikimedia.org/wiki/Special:FilePath/C.jpg?width=250");
   assert.equal(sizedImage("https://volcano.si.edu/gallery/photos/GVP-01047.jpg", 160), "https://volcano.si.edu/gallery/photos/GVP-01047.jpg");
+  for (const width of [1, 100, 160, 320, 640, 800, 1000, 5000]) {
+    const w = Number(/\/(\d+)px-/.exec(sizedImage("https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/A.jpg/320px-A.jpg", width))?.[1]);
+    assert.ok((THUMB_STEPS as readonly number[]).includes(w), `${width} → ${w}`);
+  }
+});
+
+test("photoCandidates: card size first, then what Wikimedia will serve as stored", () => {
+  const thumb = (w: number) => `https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Scone.jpg/${w}px-Scone.jpg`;
+  assert.deepEqual(photoCandidates(thumb(330), 960), [thumb(960), thumb(330)], "small stored step kept as a fallback");
+  assert.deepEqual(photoCandidates(thumb(960), 960), [thumb(960)]);
+  assert.deepEqual(photoCandidates(thumb(640), 960), [thumb(960), thumb(500)], "a non-standard stored width is never requested");
+  const original = "https://upload.wikimedia.org/wikipedia/commons/2/23/Jam.jpg";
+  assert.deepEqual(photoCandidates(original, 960), [original]);
+  const gvp = "https://volcano.si.edu/gallery/photos/GVP-01047.jpg";
+  assert.deepEqual(photoCandidates(gvp, 960), [gvp]);
+});
+
+test("wikipediaRef reads the article out of a story URL", () => {
+  assert.deepEqual(wikipediaRef("https://en.wikipedia.org/wiki/Battle_of_Kursk"), { lang: "en", title: "Battle of Kursk" });
+  assert.deepEqual(wikipediaRef("https://en.wikipedia.org/wiki/Plato%27s_Academy#History"), { lang: "en", title: "Plato's Academy" });
+  assert.deepEqual(wikipediaRef("https://fr.m.wikipedia.org/wiki/Tour_Eiffel"), { lang: "fr", title: "Tour Eiffel" });
+  assert.equal(wikipediaRef("https://earthquake.usgs.gov/earthquakes/eventpage/us7000abcd"), null);
+  assert.equal(wikipediaRef("https://en.wikipedia.org/wiki/Special:Random"), null);
+  assert.equal(wikipediaRef(""), null);
+});
+
+test("photo credit distinguishes Commons from local Wikipedia uploads", () => {
+  assert.equal(photoCredit("https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/A.jpg/960px-A.jpg"), "Wikimedia Commons");
+  assert.equal(photoCredit("https://upload.wikimedia.org/wikipedia/en/a/ab/Poster.jpg"), "Wikipedia");
+  assert.equal(photoCredit("https://volcano.si.edu/gallery/photos/GVP-01047.jpg"), "Smithsonian GVP");
 });

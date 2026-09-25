@@ -1,5 +1,6 @@
-import { imageFor, type PinImage } from "./imagery";
+import { imageFor, satelliteImage, sizedImage } from "./imagery";
 import { ImageLoader } from "./imageLoader";
+import { PinImageResolver, type ResolvedImage } from "./pinImage";
 import { continentLabel } from "./pins";
 import { formatYear } from "./otd";
 import type { Pin } from "./types";
@@ -22,6 +23,7 @@ export class Hud {
   private readonly media = el<HTMLElement>("card-media");
   private readonly imgCredit = el<HTMLElement>("card-imgcredit");
   private readonly loader = new ImageLoader();
+  private readonly images = new PinImageResolver(this.loader);
   private readonly coordLg = el<HTMLElement>("card-coord-lg");
   private readonly continentLg = el<HTMLElement>("card-continent-lg");
   private readonly statusMode = el<HTMLElement>("status-mode");
@@ -60,22 +62,47 @@ export class Hud {
     this.link.textContent = pin.storyLabel ? `${pin.storyLabel} ↗` : "read the full story ↗";
     this.media.dataset.continent = pin.continent;
     this.image.alt = pin.title;
-    this.image.dataset.ok = "false";
-    this.image.removeAttribute("src");
     this.card.dataset.open = "true";
     this.cardRect = null;
 
-    this.setImage(pin, imageFor(pin), token);
+    this.image.dataset.ok = "false";
+    this.image.removeAttribute("src");
+    const ready = this.images.peek(pin);
+    if (ready) {
+      // Prefetched: already fetched and decoded, so it paints straight away.
+      this.setImage(pin, ready, token);
+    } else {
+      this.imgCredit.textContent = "";
+      this.clearSatBadge();
+      void this.images.resolve(pin).then((image) => {
+        if (token === this.request) this.setImage(pin, image, token);
+      });
+    }
   }
 
-  /** Warm the cache for the next landing while the camera is still flying. */
+  /**
+   * Resolve a pin's picture ahead of time — the Wikipedia lookup, the bytes
+   * and the decode — so its card paints the moment the camera lands.
+   */
   prefetch(pin: Pin): void {
-    this.loader.prefetch(imageFor(pin).url);
+    this.images.prefetch(pin);
+  }
+
+  /** A small thumbnail for the Visited panel: the card's picture when known. */
+  thumbFor(pin: Pin): { url: string; fallback: string } {
+    const size = { width: 160, height: 100 };
+    const known = this.images.peek(pin);
+    const url = known?.kind === "photo" ? sizedImage(known.url, size.width) : imageFor(pin, size).url;
+    return { url, fallback: satelliteImage(pin, size).url };
   }
 
   hideCard(): void {
     this.card.dataset.open = "false";
     this.leader.dataset.on = "false";
+    // Drop the old picture now so the next card never flashes it.
+    this.request++;
+    this.image.dataset.ok = "false";
+    this.image.removeAttribute("src");
   }
 
   setMode(auto: boolean, flying: boolean): void {
@@ -174,16 +201,20 @@ export class Hud {
     this.badges.appendChild(b);
   }
 
-  /** Photo when there is one; a satellite view of the spot otherwise (or when the photo fails). */
-  private setImage(pin: Pin, image: PinImage, token: number): void {
+  private clearSatBadge(): void {
+    for (const stale of this.badges.querySelectorAll('[data-kind="sat"]')) stale.remove();
+  }
+
+  /** Show a resolved picture: a Wikipedia photo, or the satellite backup. */
+  private setImage(pin: Pin, image: ResolvedImage, token: number): void {
     this.media.dataset.kind = image.kind;
     this.imgCredit.textContent = image.kind === "satellite" ? `Satellite · ${image.credit}` : image.credit ? `Photo · ${image.credit}` : "";
-    for (const stale of this.badges.querySelectorAll('[data-kind="sat"]')) stale.remove();
+    this.clearSatBadge();
     if (image.kind === "satellite") this.badge("sat", "SATELLITE VIEW");
     void this.loadImage(pin, image, token);
   }
 
-  private async loadImage(pin: Pin, image: PinImage, token: number): Promise<void> {
+  private async loadImage(pin: Pin, image: ResolvedImage, token: number): Promise<void> {
     const src = await this.loader.load(image.url);
     if (token !== this.request) return;
     this.image.onload = () => {
@@ -193,10 +224,18 @@ export class Hud {
       if (token !== this.request) return;
       this.loader.forget(image.url);
       this.image.dataset.ok = "false";
-      if (image.kind === "photo") this.setImage(pin, imageFor(pin, { forceSatellite: true }), token);
+      if (image.kind === "photo") {
+        // Loaded during prefetch but not now (evicted and refused): try the chain again.
+        this.images.invalidate(pin);
+        void this.images.resolve(pin).then((next) => {
+          if (token === this.request && next.url !== image.url) this.setImage(pin, next, token);
+          else if (token === this.request) this.setImage(pin, { ...satelliteImage(pin), via: "satellite" }, token);
+        });
+      }
     };
     this.image.referrerPolicy = "no-referrer";
     this.image.src = src;
+    if (this.image.complete && this.image.naturalWidth > 0) this.image.dataset.ok = "true";
   }
 }
 

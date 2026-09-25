@@ -212,7 +212,8 @@ don't run two builds at once.
 - Card credit line: *Text: Wikipedia · CC BY-SA 4.0* / *Smithsonian Global
   Volcanism Program* / *Paleobiology Database · CC BY 4.0* / *USGS* / *NASA
   EONET* / *Where the ISS at?*.
-- Card image corner: *Photo · Wikimedia Commons* / *Photo · Smithsonian GVP*
+- Card image corner: *Photo · Wikimedia Commons* / *Photo · Wikipedia* (a
+  local, non-Commons upload) / *Photo · Smithsonian GVP*
   / *Satellite · Esri, Maxar, Earthstar Geographics* (or *Google* when built
   with a Static Maps key).
 - Land outlines: Natural Earth (public domain) via `world-atlas`; continent
@@ -220,8 +221,8 @@ don't run two builds at once.
 
 ## Satellite imagery (V1.2)
 
-Pins without a photo — and every live pin — show a satellite view of the
-spot. The default is the Esri World Imagery *export* endpoint
+The backup picture (V1.3: only after the cached Wikipedia photo and a live
+Wikipedia lookup both come up empty) is a satellite view of the spot. The default is the Esri World Imagery *export* endpoint
 (`server.arcgisonline.com/…/World_Imagery/MapServer/export`), which returns
 one centred 640×360 JPEG for a Web Mercator bounding box, needs no key, and
 sends CORS headers so the app can prefetch it. Esri asks for attribution
